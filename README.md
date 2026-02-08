@@ -1,1 +1,1 @@
-# vota-o
+# vote
