@@ -11,6 +11,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root{
@@ -786,6 +787,30 @@
         return true;
       }catch(e){ return false; }
     }
+<script>
+
+// ===============================
+// SUPABASE (ONLINE)
+// ===============================
+const SUPABASE_URL = "https://wiezuwoeoxnfiknxxlko.supabase.co";
+const SUPABASE_KEY = "sb_publishable_qaRM4C8B84ahQoeIGHNsCQ_E3t4XPbw";
+
+const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function supaSaveState() {
+  try {
+    const payload = { id: "global", data: STATE, updated_at: new Date().toISOString() };
+    const { error } = await supa.from("app_state").upsert(payload, { onConflict: "id" });
+    if (error) console.error(error);
+  } catch(e){ console.error(e); }
+}
+
+async function supaLoadState() {
+  try {
+    const { data } = await supa.from("app_state").select("data").eq("id","global").maybeSingle();
+    if(data?.data) STATE = data.data;
+  } catch(e){ console.error(e); }
+}
 
     // =========================
     // Estado
@@ -809,11 +834,19 @@
     let MEM_SESSION = null;
 
     function saveState(){
-      const json = JSON.stringify(STATE);
-      if(!storageSet("local", "rr_local_state", json)){
-        MEM_LOCAL = json;
-      }
-    }
+  const json = JSON.stringify(STATE);
+
+  // salva local (continua igual)
+  if(!storageSet("local", "rr_local_state", json)){
+    MEM_LOCAL = json;
+  }
+
+  // salva no Supabase também
+  if(typeof supaSaveState === "function"){
+    supaSaveState();
+  }
+}
+
     function loadState(){
       const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
       if(raw){
@@ -2663,19 +2696,24 @@
       return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
     }
 
-    // =========================
-    // Inicial
-    // =========================
-    document.addEventListener("DOMContentLoaded", ()=>{
-      // estado já carregado
-      restoreSession();
-      renderSelectClienteAssembleia();
-      updateBadges();
-      switchTab("tabClientes");
-      if(SESSION.operador) onStateUpdated();
-      // se entrou via hash morador
-      autoOpenMoradorByHash();
-    });
+// ==========================
+// Inicial
+// ==========================
+document.addEventListener("DOMContentLoaded", async () => {
+
+  // PRIMEIRO: carrega dados online (Supabase)
+  await supaLoadState();
+
+  // DEPOIS: inicia sistema
+  restoreSession();
+  renderSelectClienteAssembleia();
+  updateBadges();
+  switchTab("tabClientes");
+
+  if (SESSION.operador) onStateUpdated();
+  autoOpenMoradorByHash();
+});
+
   </script>
 </body>
 </html>
