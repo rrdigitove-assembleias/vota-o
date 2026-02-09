@@ -787,7 +787,6 @@
         return true;
       }catch(e){ return false; }
     }
-<script>
 
 // ===============================
 // SUPABASE (ONLINE)
@@ -842,7 +841,7 @@ async function supaLoadState() {
   }
 
   // salva no Supabase também
-  if(typeof supaSaveState === "function"){
+  if (typeof supaSaveState === "function") {
     supaSaveState();
   }
 }
@@ -2700,11 +2699,8 @@ async function supaLoadState() {
 // Inicial
 // ==========================
 document.addEventListener("DOMContentLoaded", async () => {
+  await supaLoadState(); // carrega do Supabase primeiro
 
-  // PRIMEIRO: carrega dados online (Supabase)
-  await supaLoadState();
-
-  // DEPOIS: inicia sistema
   restoreSession();
   renderSelectClienteAssembleia();
   updateBadges();
