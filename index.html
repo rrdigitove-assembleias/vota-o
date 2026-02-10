@@ -787,6 +787,7 @@
         return true;
       }catch(e){ return false; }
     }
+<script>
 
 // ===============================
 // SUPABASE (ONLINE)
@@ -807,7 +808,25 @@ async function supaSaveState() {
 async function supaLoadState() {
   try {
     const { data } = await supa.from("app_state").select("data").eq("id","global").maybeSingle();
-    if(data?.data) STATE = data.data;
+
+    // valida se o JSON tem o formato do nosso STATE
+    const isValidState = (s) => (
+      s && typeof s === "object" &&
+      Array.isArray(s.clientes) &&
+      Array.isArray(s.operadores) &&
+      Array.isArray(s.assembleias) &&
+      Array.isArray(s.unidades)
+    );
+
+    if (data?.data && isValidState(data.data)) {
+      // merge simples com DEFAULT_STATE para evitar faltar campos novos
+      STATE = Object.assign(structuredClone(DEFAULT_STATE), data.data);
+      return;
+    }
+
+    // Se não existir ou estiver inválido (ex.: teste/ok), regrava o padrão no banco
+    STATE = structuredClone(DEFAULT_STATE);
+    await supaSaveState();
   } catch(e){ console.error(e); }
 }
 
