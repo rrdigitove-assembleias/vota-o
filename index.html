@@ -791,40 +791,57 @@
 // ===============================
 // SUPABASE (ONLINE)
 // ===============================
+  // Status simples do banco (aparece no console; se existir um elemento #dbStatus na página, também atualiza)
+  function setDbStatus(msg){
+    console.log('[DB]', msg);
+    const el = document.getElementById('dbStatus');
+    if(el) el.textContent = msg;
+  }
+
 const SUPABASE_URL = "https://wiezuwoeoxnfiknxxlko.supabase.co";
 const SUPABASE_KEY = "sb_publishable_qaRM4C8B84ahQoeIGHNsCQ_E3t4XPbw";
 
 const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-async function supaSaveState() {
-  try {
-    const payload = { id: "global", data: STATE, updated_at: new Date().toISOString() };
-    const { error } = await supa.from("app_state").upsert(payload, { onConflict: "id" });
-    if (error) throw error;
-    setDbStatus(true, "online");
-    return true;
-  } catch(e){
-    console.error("Supabase save failed:", e);
-    setDbStatus(false, "falhou ao salvar");
-    return false;
-  }
-}
-
-async function supaLoadState() {
-  try {
-    const { data, error } = await supa.from("app_state").select("data").eq("id","global").maybeSingle();
-    if (error) throw error;
-    if (data?.data) {
-      STATE = data.data;
+  async function supaSaveState(){
+    try{
+      if(!supa){ setDbStatus('sem supabase'); return; }
+      setDbStatus('salvando...');
+      const payload = { id: "global", data: STATE, updated_at: new Date().toISOString() };
+      const { error } = await supa.from("app_state").upsert(payload, { onConflict: "id" });
+      if(error){
+        console.error('Supabase save failed:', error);
+        setDbStatus('falha ao salvar');
+      } else {
+        setDbStatus('salvo');
+      }
+    }catch(e){
+      console.error('Supabase save exception:', e);
+      setDbStatus('falha ao salvar');
     }
-    setDbStatus(true, "online");
-    return true;
-  } catch(e){
-    console.error("Supabase load failed:", e);
-    setDbStatus(false, "sem acesso");
-    return false;
   }
-}
+
+  async function supaLoadState(){
+    try{
+      if(!supa){ setDbStatus('sem supabase'); return; }
+      setDbStatus('carregando...');
+      const { data, error } = await supa.from("app_state").select("data").eq("id","global").single();
+      if(error){
+        console.error('Supabase load failed:', error);
+        setDbStatus('falha ao carregar');
+        return;
+      }
+      if(data && data.data){
+        STATE = data.data;
+        setDbStatus('carregado');
+      } else {
+        setDbStatus('vazio');
+      }
+    }catch(e){
+      console.error('Supabase load exception:', e);
+      setDbStatus('falha ao carregar');
+    }
+  }
 
     // =========================
     // Estado
@@ -2726,7 +2743,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
   </script>
-  <!-- Supabase status (mostra se está salvando no banco online) -->
-  <div id="dbStatus" style="position:fixed;right:12px;bottom:12px;z-index:9999;background:#111;color:#fff;padding:6px 10px;border-radius:10px;font-size:12px;opacity:.85">DB: <span id="dbStatusText">verificando...</span></div>
 </body>
 </html>
