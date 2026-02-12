@@ -787,7 +787,6 @@
         return true;
       }catch(e){ return false; }
     }
-<script>
 
 // ===============================
 // SUPABASE (ONLINE)
@@ -801,46 +800,30 @@ async function supaSaveState() {
   try {
     const payload = { id: "global", data: STATE, updated_at: new Date().toISOString() };
     const { error } = await supa.from("app_state").upsert(payload, { onConflict: "id" });
-    if (error) {
-      console.error("[Supabase] ERRO ao salvar app_state:", error);
-    } else {
-      console.log("[Supabase] Estado remoto SALVO com sucesso.");
-    }
-  } catch (e) {
-    console.error("[Supabase] Exceção ao salvar estado:", e);
+    if (error) throw error;
+    setDbStatus(true, "online");
+    return true;
+  } catch(e){
+    console.error("Supabase save failed:", e);
+    setDbStatus(false, "falhou ao salvar");
+    return false;
   }
-}
-;
-    const { error } = await supa.from("app_state").upsert(payload, { onConflict: "id" });
-    if (error) console.error(error);
-  } catch(e){ console.error(e); }
 }
 
 async function supaLoadState() {
   try {
-    const { data, error } = await supa
-      .from("app_state")
-      .select("data, updated_at")
-      .eq("id", "global")
-      .maybeSingle();
-
-    if (error) {
-      console.error("[Supabase] ERRO ao carregar app_state:", error);
-      return;
+    const { data, error } = await supa.from("app_state").select("data").eq("id","global").maybeSingle();
+    if (error) throw error;
+    if (data?.data) {
+      STATE = data.data;
     }
-    if (!data || !data.data) {
-      console.warn("[Supabase] Nenhum estado remoto encontrado (linha 'global' vazia).");
-      return;
-    }
-    STATE = data.data;
-    console.log("[Supabase] Estado remoto carregado. updated_at =", data.updated_at);
-  } catch (e) {
-    console.error("[Supabase] Exceção ao carregar estado:", e);
+    setDbStatus(true, "online");
+    return true;
+  } catch(e){
+    console.error("Supabase load failed:", e);
+    setDbStatus(false, "sem acesso");
+    return false;
   }
-}
-= await supa.from("app_state").select("data").eq("id","global").maybeSingle();
-    if(data?.data) STATE = data.data;
-  } catch(e){ console.error(e); }
 }
 
     // =========================
@@ -2743,5 +2726,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
   </script>
+  <!-- Supabase status (mostra se está salvando no banco online) -->
+  <div id="dbStatus" style="position:fixed;right:12px;bottom:12px;z-index:9999;background:#111;color:#fff;padding:6px 10px;border-radius:10px;font-size:12px;opacity:.85">DB: <span id="dbStatusText">verificando...</span></div>
 </body>
 </html>
