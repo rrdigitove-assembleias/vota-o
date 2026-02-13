@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="pt-br">
 <head>
@@ -11,7 +12,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     :root{
@@ -788,52 +788,6 @@
       }catch(e){ return false; }
     }
 
-// ===============================
-// SUPABASE (ONLINE)
-// ===============================
-const SUPABASE_URL = "https://wiezuwoeoxnfiknxxlko.supabase.co";
-const SUPABASE_KEY = "sb_publishable_qaRM4C8B84ahQoeIGHNsCQ_E3t4XPbw";
-
-const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-async function supaSaveState() {
-  try {
-    const payload = { id: "global", data: STATE, updated_at: new Date().toISOString() };
-    const { error } = await supa.from("app_state").upsert(payload, { onConflict: "id" });
-    if (error) console.error(error);
-  } catch(e){ console.error(e); }
-}
-
-async function supaLoadState() {
-  try {
-    const { data, error } = await supa
-      .from("app_state")
-      .select("data")
-      .eq("id", "global")
-      .maybeSingle();
-
-    if (error) throw error;
-
-    const incoming = data?.data;
-
-    // Se vier vazio ({}), mantém o DEFAULT_STATE (para não perder usuário master)
-    if (incoming && typeof incoming === "object" && Object.keys(incoming).length > 0) {
-      // merge simples (top-level). Para estruturas internas, mantemos o que vier do banco.
-      STATE = Object.assign(structuredClone(DEFAULT_STATE), incoming);
-    } else {
-      STATE = structuredClone(DEFAULT_STATE);
-      // opcional: inicializa no banco uma vez
-      await supaSaveState();
-    }
-
-    // mantém cache local como fallback (não é obrigatório)
-    try { storageSet("local", "rr_local_state", JSON.stringify(STATE)); } catch(e){}
-  } catch (e) {
-    console.error("Supabase load failed:", e);
-  }
-}
-
-
     // =========================
     // Estado
     // =========================
@@ -856,29 +810,17 @@ async function supaLoadState() {
     let MEM_SESSION = null;
 
     function saveState(){
-  const json = JSON.stringify(STATE);
-
-  // salva local (continua igual)
-  if(!storageSet("local", "rr_local_state", json)){
-    MEM_LOCAL = json;
-  }
-
-  // salva no Supabase também
-  if(typeof supaSaveState === "function"){
-    supaSaveState();
-  }
-}
-function loadState(){
-  const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
-  if(raw){
-    try{
-      const incoming = JSON.parse(raw);
-      if(incoming && typeof incoming === "object"){
-        STATE = Object.assign(structuredClone(DEFAULT_STATE), incoming);
+      const json = JSON.stringify(STATE);
+      if(!storageSet("local", "rr_local_state", json)){
+        MEM_LOCAL = json;
       }
-    }catch(e){}
-  }
-}
+    }
+    function loadState(){
+      const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
+      if(raw){
+        try{ STATE = JSON.parse(raw); }catch(e){}
+      }
+    }
     function persistSession(){
       const id = SESSION.operador?.id || "";
       if(id){
@@ -2722,21 +2664,19 @@ function loadState(){
       return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
     }
 
-// ==========================
-// Inicial
-// ==========================
-document.addEventListener("DOMContentLoaded", async () => {
-  await supaLoadState(); // carrega do Supabase primeiro
-
-  restoreSession();
-  renderSelectClienteAssembleia();
-  updateBadges();
-  switchTab("tabClientes");
-
-  if (SESSION.operador) onStateUpdated();
-  autoOpenMoradorByHash();
-});
-
+    // =========================
+    // Inicial
+    // =========================
+    document.addEventListener("DOMContentLoaded", ()=>{
+      // estado já carregado
+      restoreSession();
+      renderSelectClienteAssembleia();
+      updateBadges();
+      switchTab("tabClientes");
+      if(SESSION.operador) onStateUpdated();
+      // se entrou via hash morador
+      autoOpenMoradorByHash();
+    });
   </script>
 </body>
 </html>
