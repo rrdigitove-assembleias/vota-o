@@ -791,57 +791,48 @@
 // ===============================
 // SUPABASE (ONLINE)
 // ===============================
-  // Status simples do banco (aparece no console; se existir um elemento #dbStatus na página, também atualiza)
-  function setDbStatus(msg){
-    console.log('[DB]', msg);
-    const el = document.getElementById('dbStatus');
-    if(el) el.textContent = msg;
-  }
-
 const SUPABASE_URL = "https://wiezuwoeoxnfiknxxlko.supabase.co";
 const SUPABASE_KEY = "sb_publishable_qaRM4C8B84ahQoeIGHNsCQ_E3t4XPbw";
 
 const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-  async function supaSaveState(){
-    try{
-      if(!supa){ setDbStatus('sem supabase'); return; }
-      setDbStatus('salvando...');
-      const payload = { id: "global", data: STATE, updated_at: new Date().toISOString() };
-      const { error } = await supa.from("app_state").upsert(payload, { onConflict: "id" });
-      if(error){
-        console.error('Supabase save failed:', error);
-        setDbStatus('falha ao salvar');
-      } else {
-        setDbStatus('salvo');
-      }
-    }catch(e){
-      console.error('Supabase save exception:', e);
-      setDbStatus('falha ao salvar');
-    }
-  }
+async function supaSaveState() {
+  try {
+    const payload = { id: "global", data: STATE, updated_at: new Date().toISOString() };
+    const { error } = await supa.from("app_state").upsert(payload, { onConflict: "id" });
+    if (error) console.error(error);
+  } catch(e){ console.error(e); }
+}
 
-  async function supaLoadState(){
-    try{
-      if(!supa){ setDbStatus('sem supabase'); return; }
-      setDbStatus('carregando...');
-      const { data, error } = await supa.from("app_state").select("data").eq("id","global").single();
-      if(error){
-        console.error('Supabase load failed:', error);
-        setDbStatus('falha ao carregar');
-        return;
-      }
-      if(data && data.data){
-        STATE = data.data;
-        setDbStatus('carregado');
-      } else {
-        setDbStatus('vazio');
-      }
-    }catch(e){
-      console.error('Supabase load exception:', e);
-      setDbStatus('falha ao carregar');
+async function supaLoadState() {
+  try {
+    const { data, error } = await supa
+      .from("app_state")
+      .select("data")
+      .eq("id", "global")
+      .maybeSingle();
+
+    if (error) throw error;
+
+    const incoming = data?.data;
+
+    // Se vier vazio ({}), mantém o DEFAULT_STATE (para não perder usuário master)
+    if (incoming && typeof incoming === "object" && Object.keys(incoming).length > 0) {
+      // merge simples (top-level). Para estruturas internas, mantemos o que vier do banco.
+      STATE = Object.assign(structuredClone(DEFAULT_STATE), incoming);
+    } else {
+      STATE = structuredClone(DEFAULT_STATE);
+      // opcional: inicializa no banco uma vez
+      await supaSaveState();
     }
+
+    // mantém cache local como fallback (não é obrigatório)
+    try { storageSet("local", "rr_local_state", JSON.stringify(STATE)); } catch(e){}
+  } catch (e) {
+    console.error("Supabase load failed:", e);
   }
+}
+
 
     // =========================
     // Estado
@@ -873,17 +864,21 @@ const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   }
 
   // salva no Supabase também
-  if (typeof supaSaveState === "function") {
+  if(typeof supaSaveState === "function"){
     supaSaveState();
   }
 }
-
-    function loadState(){
-      const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
-      if(raw){
-        try{ STATE = JSON.parse(raw); }catch(e){}
+function loadState(){
+  const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
+  if(raw){
+    try{
+      const incoming = JSON.parse(raw);
+      if(incoming && typeof incoming === "object"){
+        STATE = Object.assign(structuredClone(DEFAULT_STATE), incoming);
       }
-    }
+    }catch(e){}
+  }
+}
     function persistSession(){
       const id = SESSION.operador?.id || "";
       if(id){
