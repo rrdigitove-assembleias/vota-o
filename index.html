@@ -2,6 +2,7 @@
 <!doctype html>
 <html lang="pt-br">
 <head>
+  <!-- DEPLOY SUPABASE SYNC: 2026-02-13 01:29 -->
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>RR DIGIVOTE - Assembleia & Votação</title>
@@ -13,7 +14,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
-  <style>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
     :root{
       --rr-dark:#1f2937;
       --rr-gray:#374151;
@@ -801,6 +804,89 @@
     };
 
     let STATE = structuredClone(DEFAULT_STATE);
+// =========================
+// SUPABASE (sync entre abas / dispositivos)
+// Preencha com seus dados do Supabase (Project Settings -> API)
+// =========================
+const SUPABASE_URL = "COLE_AQUI_O_PROJECT_URL";
+const SUPABASE_ANON_KEY = "COLE_AQUI_A_ANON_KEY";
+
+function setDbStatus(msg){
+  const el = document.getElementById("dbStatus");
+  if(el) el.innerText = msg;
+}
+
+function supabaseReady(){
+  return !!(window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+let supa = null;
+if(supabaseReady()) {
+  try {
+    supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch(e) {
+    supa = null;
+  }
+}
+
+async function supaLoadState(){
+  if(!supa) return false;
+  try {
+    setDbStatus("DB: carregando…");
+    const { data, error } = await supa
+      .from(SUPABASE_TABLE)
+      .select("data")
+      .eq("id", SUPABASE_ROW_ID)
+      .maybeSingle();
+
+    if(error) throw error;
+    if(data && data.data) {
+      // substitui o STATE pelo do banco (mantendo o formato)
+      STATE = data.data;
+      setDbStatus("DB: ok");
+      return true;
+    }
+    setDbStatus("DB: vazio");
+    return false;
+  } catch(e) {
+    console.error("Supabase load failed:", e);
+    setDbStatus("DB: erro");
+    return false;
+  }
+}
+
+let _supaSaveTimer = null;
+function scheduleSupaSave(){
+  if(!supa) return;
+  if(_supaSaveTimer) clearTimeout(_supaSaveTimer);
+  _supaSaveTimer = setTimeout(() => {
+    supaSaveState().catch(()=>{});
+  }, 600);
+}
+
+async function supaSaveState(){
+  if(!supa) return false;
+  try {
+    setDbStatus("DB: salvando…");
+    const payload = {
+      id: SUPABASE_ROW_ID,
+      data: STATE,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await supa
+      .from(SUPABASE_TABLE)
+      .upsert(payload, { onConflict: "id" });
+
+    if(error) throw error;
+    setDbStatus("DB: ok");
+    return true;
+  } catch(e) {
+    console.error("Supabase save failed:", e);
+    setDbStatus("DB: erro");
+    return false;
+  }
+}
+
 
     // IMPORTANTÍSSIMO: SESSION antes de qualquer render (evita TDZ)
     var SESSION = { operador:null };
@@ -810,11 +896,17 @@
     let MEM_SESSION = null;
 
     function saveState(){
-      const json = JSON.stringify(STATE);
-      if(!storageSet("local", "rr_local_state", json)){
-        MEM_LOCAL = json;
-      }
-    }
+  const json = JSON.stringify(STATE);
+
+  // salva local (continua igual)
+  if(!storageSet("local", "rr_local_state", json)){
+    MEM_LOCAL = json;
+  }
+
+  // salva no Supabase (para sincronizar com outras abas / usuários)
+  scheduleSupaSave();
+}
+
     function loadState(){
       const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
       if(raw){
@@ -2678,5 +2770,8 @@
       autoOpenMoradorByHash();
     });
   </script>
+
+  <div id="dbStatus" style="position:fixed;bottom:8px;left:8px;z-index:9999;font-size:12px;background:#0008;color:#fff;padding:4px 8px;border-radius:8px;">DB: -</div>
+
 </body>
 </html>
