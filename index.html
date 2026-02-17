@@ -15,7 +15,38 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  // ===== ONLINE SYNC (Netlify Functions) =====
+const REMOTE_ENABLED = true;
+
+async function remoteGetState() {
+  const r = await fetch("/.netlify/functions/state_get", { cache: "no-store" });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "Falha ao carregar estado online");
+  return j.state || {};
+}
+
+async function remoteSetState(stateObj) {
+  const r = await fetch("/.netlify/functions/state_set", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state: stateObj })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) throw new Error(j.error || "Falha ao salvar estado online");
+  return true;
+}
+
+// debounce simples para não salvar a cada clique
+let __remoteTimer = null;
+function scheduleRemoteSave() {
+  if (!REMOTE_ENABLED) return;
+  clearTimeout(__remoteTimer);
+  __remoteTimer = setTimeout(async () => {
+    try { await remoteSetState(STATE); }
+    catch (e) { console.warn("Falha sync online:", e?.message || e); }
+  }, 600);
+}
+
 <style>
     :root{
       --rr-dark:#1f2937;
@@ -1061,6 +1092,39 @@
         return true;
       }catch(e){ return false; }
     }
+// ========================
+// ONLINE SYNC (Netlify -> Supabase)
+// ========================
+const REMOTE_ENABLED = true;
+
+async function remoteGetState() {
+  const r = await fetch("/.netlify/functions/state_get", { cache: "no-store" });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "Falha ao carregar estado online");
+  return j.state || {};
+}
+
+async function remoteSetState(stateObj) {
+  const r = await fetch("/.netlify/functions/state_set", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state: stateObj })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) throw new Error(j.error || "Falha ao salvar estado online");
+  return true;
+}
+
+// debounce simples para evitar salvar online a cada clique
+let __remoteTimer = null;
+function scheduleRemoteSave() {
+  if (!REMOTE_ENABLED) return;
+  clearTimeout(__remoteTimer);
+  __remoteTimer = setTimeout(async () => {
+    try { await remoteSetState(STATE); }
+    catch (e) { console.warn("Falha sync online:", e?.message || e); }
+  }, 600);
+}
 
     // =========================
     // Estado
@@ -1175,15 +1239,39 @@ async function supaSaveState(){
   }
 
   // salva no Supabase (para sincronizar com outras abas / usuários)
-  scheduleSupaSave();
+  scheduleRemoteSave();
 }
 
-    function loadState(){
-      const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
-      if(raw){
-        try{ STATE = JSON.parse(raw); }catch(e){}
+    async function loadState(){
+  // 1) carrega local primeiro (fallback rápido)
+  const raw = storageGet("local","rr_local_state") || MEM_LOCAL;
+  if(raw){
+    try{ STATE = JSON.parse(raw); }catch(e){};
+  }
+
+  // 2) tenta carregar do online (Netlify Functions -> Supabase)
+  if(typeof REMOTE_ENABLED !== "undefined" && REMOTE_ENABLED){
+    try{
+      const remote = await remoteGetState();
+
+      // se remoto tem dados, ele vira o principal
+      const hasRemote = remote && typeof remote === "object" && Object.keys(remote).length > 0;
+      if(hasRemote){
+        STATE = remote;
+
+        // espelha local também
+        const json = JSON.stringify(STATE);
+        if(!storageSet("local","rr_local_state", json)) MEM_LOCAL = json;
+      } else {
+        // remoto vazio: primeira vez -> sobe o local atual
+        await remoteSetState(STATE);
       }
+    }catch(e){
+      console.warn("Falha ao carregar online (usando local):", e?.message || e);
     }
+  }
+}
+
     function persistSession(){
       const id = SESSION.operador?.id || "";
       if(id){
@@ -1207,7 +1295,11 @@ async function supaSaveState(){
     }
 
     // carregue estado imediatamente
-    loadState();
+(async ()=>{
+  await loadState();
+  restoreSession();
+})();
+
 
     // =========================
     // Edit context (para botões Editar)
