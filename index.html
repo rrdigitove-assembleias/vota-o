@@ -107,7 +107,146 @@
       .content{ margin-left:0; }
       .mor-grid{ grid-template-columns: 1fr; }
     }
-  </style>
+  
+
+    /* =========================
+       Tema sutil (MORADOR)
+       - cinza + azul, discreto
+       ========================= */
+    #moradorRoot .mor-top{
+      background:linear-gradient(90deg,#ffffff,#f1f5f9);
+      border-bottom:3px solid var(--rr-accent);
+    }
+    #moradorRoot .mor-box,
+    #moradorRoot .vote-card{
+      position:relative;
+      overflow:hidden;
+      box-shadow:0 4px 14px rgba(0,0,0,.04);
+    }
+    #moradorRoot .mor-box::before,
+    #moradorRoot .vote-card::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; bottom:0;
+      width:6px;
+      background:linear-gradient(180deg, rgba(11,79,108,.35), rgba(15,118,110,.22));
+    }
+    #moradorRoot .mor-box,
+    #moradorRoot .vote-card{
+      border:1px solid #e5e7eb;
+      background:#fff;
+    }
+    #moradorRoot #mAssNome,
+    #moradorRoot #mUnKey{
+      color:var(--rr-accent);
+    }
+    #moradorRoot #mAssInfo,
+    #moradorRoot #mExpand{
+      color:#475569;
+    }
+    #moradorRoot .opt.selected{
+      border-color:rgba(11,79,108,.55);
+      background:rgba(11,79,108,.06);
+    }
+
+  
+    /* =========================
+       MORADOR THEME v11 (cinza/azul moderno + seleção laranja)
+       (somente telas do morador e modal QR)
+       ========================= */
+    :root{
+      --mor-accent:#2563eb;       /* azul moderno */
+      --mor-accent2:#0ea5e9;      /* cyan */
+      --mor-accent-soft: rgba(37,99,235,.10);
+      --mor-line: rgba(37,99,235,.35);
+      --mor-surface:#f8fafc;
+      --mor-orange:#f59e0b;       /* borda seleção */
+      --mor-orange-soft: rgba(245,158,11,.14);
+    }
+
+    /* Modal QR (admin) – apenas visual */
+    #modalQR .modal-header{
+      background: linear-gradient(90deg, var(--mor-accent), var(--mor-accent2));
+      color:#fff;
+    }
+    #modalQR .modal-title{ font-weight:800; }
+    #modalQR .btn-close{ filter: invert(1) grayscale(1); }
+    #modalQR .modal-body .border.rounded.bg-light{
+      border-color: var(--mor-line)!important;
+      background: var(--mor-surface)!important;
+      box-shadow: 0 8px 22px rgba(2,6,23,.06);
+    }
+    #modalQR #qrLinkText{
+      color:#0f172a;
+      font-weight:600;
+    }
+    #modalQR .btn-outline-secondary{
+      border-color: var(--mor-line);
+    }
+
+    /* Topo do morador */
+    #moradorRoot .mor-top{
+      background: linear-gradient(90deg, #ffffff, var(--mor-surface));
+      border-bottom: 4px solid var(--mor-accent);
+      box-shadow: 0 6px 18px rgba(2,6,23,.06);
+    }
+    #moradorRoot .brand{ color:#0f172a; }
+    #moradorRoot .btn-dark{
+      background: var(--mor-accent);
+      border-color: var(--mor-accent);
+    }
+    #moradorRoot .btn-dark:hover{ filter:brightness(.95); }
+
+    /* Cards principais do morador */
+    #moradorRoot .mor-box,
+    #moradorRoot .vote-card,
+    #moradorRoot #moradorLogin.cardx{
+      border:1px solid rgba(15,23,42,.10)!important;
+      box-shadow: 0 10px 26px rgba(2,6,23,.06);
+      position:relative;
+    }
+    #moradorRoot .mor-box::before,
+    #moradorRoot .vote-card::before,
+    #moradorRoot #moradorLogin.cardx::before{
+      content:"";
+      position:absolute; left:0; top:0; bottom:0;
+      width:6px;
+      background: linear-gradient(180deg, var(--mor-accent), var(--mor-accent2));
+      border-radius:14px 0 0 14px;
+      opacity:.9;
+    }
+
+    /* Destaques em campos (login morador) */
+    #moradorRoot #moradorLogin .form-control{
+      border-color: rgba(37,99,235,.28);
+    }
+    #moradorRoot #moradorLogin .form-control:focus{
+      border-color: var(--mor-accent);
+      box-shadow: 0 0 0 .2rem var(--mor-accent-soft);
+    }
+    #moradorRoot #moradorLogin .btn-rr{
+      background: linear-gradient(90deg, var(--mor-accent), var(--mor-accent2));
+      border:0;
+    }
+
+    /* Opções de voto (mais realçado) */
+    #moradorRoot .opt{
+      border:1px solid rgba(15,23,42,.12);
+      background:#fff;
+      transition: transform .06s ease, box-shadow .12s ease, border-color .12s ease;
+    }
+    #moradorRoot .opt:hover{
+      border-color: rgba(37,99,235,.35);
+      box-shadow: 0 8px 18px rgba(2,6,23,.06);
+      transform: translateY(-1px);
+    }
+    #moradorRoot .opt.selected{
+      border:2px solid var(--mor-orange);
+      background: var(--mor-orange-soft);
+      box-shadow: 0 10px 24px rgba(245,158,11,.14);
+    }
+
+</style>
 </head>
 
 <body>
