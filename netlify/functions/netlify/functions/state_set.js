@@ -1,27 +1,55 @@
 const { createClient } = require("@supabase/supabase-js");
 
-exports.handler = async () => {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+exports.handler = async (event) => {
+  try {
+    if (event.httpMethod === "OPTIONS") {
+      return {
+        statusCode: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Methods": "POST, OPTIONS"
+        },
+        body: ""
+      };
+    }
 
-  const supabase = createClient(supabaseUrl, serviceKey);
+    if (event.httpMethod !== "POST") {
+      return { statusCode: 405, body: "Method Not Allowed" };
+    }
 
-  const { data, error } = await supabase
-    .from("rr_digivote_state")
-    .select("data")
-    .eq("id", "MAIN")
-    .single();
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (error) {
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    const body = JSON.parse(event.body || "{}");
+    const state = body?.state ?? body; // aceita {state:...} ou o objeto direto
+
+    if (!state || typeof state !== "object") {
+      return { statusCode: 400, body: "Invalid state" };
+    }
+
+    const { error } = await supabase
+      .from("rr_digivote_state")
+      .upsert({
+        id: "MAIN",
+        data: state,
+        updated_at: new Date().toISOString()
+      });
+
+    if (error) throw error;
+
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ok: true })
+    };
+  } catch (e) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ok: false, error: String(e?.message || e) })
     };
   }
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify(data.data || {})
-  };
 };
-
