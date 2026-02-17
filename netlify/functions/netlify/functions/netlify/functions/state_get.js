@@ -1,26 +1,33 @@
 const { createClient } = require("@supabase/supabase-js");
 
-exports.handler = async (event) => {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+exports.handler = async () => {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  const supabase = createClient(supabaseUrl, serviceKey);
+    const supabase = createClient(supabaseUrl, serviceKey);
 
-  const body = JSON.parse(event.body || "{}");
+    const { data, error } = await supabase
+      .from("rr_digivote_state")
+      .select("data")
+      .eq("id", "MAIN")
+      .single();
 
-  const { error } = await supabase
-    .from("rr_digivote_state")
-    .upsert({ id: "MAIN", data: body });
+    if (error) throw error;
 
-  if (error) {
+    return {
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      },
+      body: JSON.stringify({ ok: true, state: data?.data || {} })
+    };
+  } catch (e) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ok: false, error: String(e?.message || e) })
     };
   }
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ ok: true })
-  };
 };
