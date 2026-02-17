@@ -15,13 +15,12 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   
-  // ===== ONLINE SYNC (Netlify Functions) =====
-const REMOTE_ENABLED = true;
+  const REMOTE_ENABLED = true;
 
 async function remoteGetState() {
   const r = await fetch("/.netlify/functions/state_get", { cache: "no-store" });
   const j = await r.json();
-  if (!j.ok) throw new Error(j.error || "Falha ao carregar estado online");
+  if (!j?.ok) throw new Error(j?.error || "Falha ao carregar estado online");
   return j.state || {};
 }
 
@@ -32,20 +31,15 @@ async function remoteSetState(stateObj) {
     body: JSON.stringify({ state: stateObj })
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.ok) throw new Error(j.error || "Falha ao salvar estado online");
+  if (!r.ok || !j?.ok) throw new Error(j?.error || "Falha ao salvar estado online");
   return true;
 }
 
-// debounce simples para não salvar a cada clique
-let __remoteTimer = null;
-function scheduleRemoteSave() {
-  if (!REMOTE_ENABLED) return;
-  clearTimeout(__remoteTimer);
-  __remoteTimer = setTimeout(async () => {
-    try { await remoteSetState(STATE); }
-    catch (e) { console.warn("Falha sync online:", e?.message || e); }
-  }, 600);
+function setDBStatus(msg){
+  const el = document.getElementById('dbStatus');
+  if(el) el.textContent = msg || '';
 }
+
 
 <style>
     :root{
@@ -1092,39 +1086,6 @@ function scheduleRemoteSave() {
         return true;
       }catch(e){ return false; }
     }
-// ========================
-// ONLINE SYNC (Netlify -> Supabase)
-// ========================
-const REMOTE_ENABLED = true;
-
-async function remoteGetState() {
-  const r = await fetch("/.netlify/functions/state_get", { cache: "no-store" });
-  const j = await r.json();
-  if (!j.ok) throw new Error(j.error || "Falha ao carregar estado online");
-  return j.state || {};
-}
-
-async function remoteSetState(stateObj) {
-  const r = await fetch("/.netlify/functions/state_set", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state: stateObj })
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.ok) throw new Error(j.error || "Falha ao salvar estado online");
-  return true;
-}
-
-// debounce simples para evitar salvar online a cada clique
-let __remoteTimer = null;
-function scheduleRemoteSave() {
-  if (!REMOTE_ENABLED) return;
-  clearTimeout(__remoteTimer);
-  __remoteTimer = setTimeout(async () => {
-    try { await remoteSetState(STATE); }
-    catch (e) { console.warn("Falha sync online:", e?.message || e); }
-  }, 600);
-}
 
     // =========================
     // Estado
@@ -1143,94 +1104,31 @@ function scheduleRemoteSave() {
 // SUPABASE (sync entre abas / dispositivos)
 // Preencha com seus dados do Supabase (Project Settings -> API)
 // =========================
-const SUPABASE_URL = "https://wiezuw...supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....";
+// =========================
+// SYNC ONLINE (Netlify Functions -> Supabase)
+// =========================
+const REMOTE_ENABLED = true;
+let _remoteSaveTimer = null;
 
-function setDbStatus(msg){
-  const el = document.getElementById("dbStatus");
-  if(el) el.innerText = msg;
+async function remoteGetState(){
+  const r = await fetch("/.netlify/functions/state_get", { cache:"no-store" });
+  const j = await r.json();
+  if(!j?.ok) throw new Error(j?.error || "Falha ao carregar estado online");
+  return j.state || {};
 }
 
-function supabaseReady(){
-  return !!(window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY);
+async function remoteSetState(stateObj){
+  const r = await fetch("/.netlify/functions/state_set", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ state: stateObj })
+  });
+  const j = await r.json().catch(()=> ({}));
+  if(!r.ok || !j?.ok) throw new Error(j?.error || "Falha ao salvar estado online");
+  return true;
 }
 
-let supa = null;
-if(supabaseReady()) {
-  try {
-    supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } catch(e) {
-    supa = null;
-  }
-}
-
-async function supaLoadState(){
-  if(!supa) return false;
-  try {
-    setDbStatus("DB: carregando…");
-    const { data, error } = await supa
-      .from(SUPABASE_TABLE)
-      .select("data")
-      .eq("id", SUPABASE_ROW_ID)
-      .maybeSingle();
-
-    if(error) throw error;
-    if(data && data.data) {
-      // substitui o STATE pelo do banco (mantendo o formato)
-      STATE = data.data;
-      setDbStatus("DB: ok");
-      return true;
-    }
-    setDbStatus("DB: vazio");
-    return false;
-  } catch(e) {
-    console.error("Supabase load failed:", e);
-    setDbStatus("DB: erro");
-    return false;
-  }
-}
-
-let _supaSaveTimer = null;
-function scheduleSupaSave(){
-  if(!supa) return;
-  if(_supaSaveTimer) clearTimeout(_supaSaveTimer);
-  _supaSaveTimer = setTimeout(() => {
-    supaSaveState().catch(()=>{});
-  }, 600);
-}
-
-async function supaSaveState(){
-  if(!supa) return false;
-  try {
-    setDbStatus("DB: salvando…");
-    const payload = {
-      id: SUPABASE_ROW_ID,
-      data: STATE,
-      updated_at: new Date().toISOString()
-    };
-    const { error } = await supa
-      .from(SUPABASE_TABLE)
-      .upsert(payload, { onConflict: "id" });
-
-    if(error) throw error;
-    setDbStatus("DB: ok");
-    return true;
-  } catch(e) {
-    console.error("Supabase save failed:", e);
-    setDbStatus("DB: erro");
-    return false;
-  }
-}
-
-
-    // IMPORTANTÍSSIMO: SESSION antes de qualquer render (evita TDZ)
-    var SESSION = { operador:null };
-
-    // fallback memória se storage bloqueado
-    let MEM_LOCAL = null;
-    let MEM_SESSION = null;
-
-    function saveState(){
+function saveState(){
   const json = JSON.stringify(STATE);
 
   // salva local (continua igual)
@@ -1238,40 +1136,57 @@ async function supaSaveState(){
     MEM_LOCAL = json;
   }
 
-  // salva no Supabase (para sincronizar com outras abas / usuários)
-  scheduleRemoteSave();
+  // salva online (sem travar a tela)
+  if(!REMOTE_ENABLED) return;
+
+  if(_remoteSaveTimer) clearTimeout(_remoteSaveTimer);
+  _remoteSaveTimer = setTimeout(async ()=>{
+    try{
+      await remoteSetState(STATE);
+      setDBStatus("SYNC: ok");
+    }catch(e){
+      console.warn("Falha ao salvar online:", e?.message || e);
+      setDBStatus("SYNC: offline");
+    }
+  }, 600);
 }
 
     async function loadState(){
-  // 1) carrega local primeiro (fallback rápido)
-  const raw = storageGet("local","rr_local_state") || MEM_LOCAL;
+  // 1) Carrega local primeiro (fallback)
+  const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
   if(raw){
-    try{ STATE = JSON.parse(raw); }catch(e){};
+    try{ STATE = JSON.parse(raw); }catch(e){}
   }
 
-  // 2) tenta carregar do online (Netlify Functions -> Supabase)
-  if(typeof REMOTE_ENABLED !== "undefined" && REMOTE_ENABLED){
-    try{
-      const remote = await remoteGetState();
+  if(!REMOTE_ENABLED){
+    setDBStatus("SYNC: local");
+    return;
+  }
 
-      // se remoto tem dados, ele vira o principal
-      const hasRemote = remote && typeof remote === "object" && Object.keys(remote).length > 0;
-      if(hasRemote){
-        STATE = remote;
+  // 2) Tenta online
+  try{
+    const remote = await remoteGetState();
+    const remoteHasData = remote && typeof remote === "object" && Object.keys(remote).length > 0;
 
-        // espelha local também
-        const json = JSON.stringify(STATE);
-        if(!storageSet("local","rr_local_state", json)) MEM_LOCAL = json;
-      } else {
-        // remoto vazio: primeira vez -> sobe o local atual
-        await remoteSetState(STATE);
-      }
-    }catch(e){
-      console.warn("Falha ao carregar online (usando local):", e?.message || e);
+    if(remoteHasData){
+      STATE = remote;
+
+      // espelha local
+      const json2 = JSON.stringify(STATE);
+      if(!storageSet("local", "rr_local_state", json2)) MEM_LOCAL = json2;
+
+      setDBStatus("SYNC: ok");
+    }else{
+      // online vazio: envia o local atual (primeira vez)
+      await remoteSetState(STATE);
+      setDBStatus("SYNC: ok");
     }
+  }catch(e){
+    console.warn("Falha ao carregar online (usando local):", e?.message || e);
+    setDBStatus("SYNC: offline");
   }
 }
-
+    }
     function persistSession(){
       const id = SESSION.operador?.id || "";
       if(id){
@@ -1295,11 +1210,7 @@ async function supaSaveState(){
     }
 
     // carregue estado imediatamente
-(async ()=>{
-  await loadState();
-  restoreSession();
-})();
-
+    const STATE_LOAD_PROMISE = loadState();
 
     // =========================
     // Edit context (para botões Editar)
@@ -3841,6 +3752,8 @@ function gravarVotoManual(){
     // Inicial
     // =========================
     document.addEventListener("DOMContentLoaded", ()=>{
+      Promise.resolve(STATE_LOAD_PROMISE).then(()=>{
+
       // estado já carregado
       restoreSession();
     checkResetHash();
@@ -3850,6 +3763,7 @@ function gravarVotoManual(){
       if(SESSION.operador) onStateUpdated();
       // se entrou via hash morador
       autoOpenMoradorByHash();
+      });
     });
   </script>
 
