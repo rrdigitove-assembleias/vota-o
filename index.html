@@ -127,6 +127,7 @@
         <input id="loginPass" type="password" class="form-control" placeholder="ex.: master" autocomplete="current-password">
       </div>
       <button class="btn btn-rr w-100 fw-bold" onclick="validarLogin()">Entrar</button>
+      <button class="btn btn-link w-100 mt-2" onclick="abrirEsqueciSenhaModal()">Esqueci minha senha</button>
       <div class="smallnote mt-3">
         Padrão: usuário <b>master</b> / senha <b>master</b>
       </div>
@@ -273,6 +274,14 @@
             <div class="col-md-3">
               <label class="form-label small fw-bold">Nome</label>
               <input id="opNome" class="form-control" autocomplete="name">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small fw-bold">CPF</label>
+              <input id="opCpf" class="form-control" placeholder="Somente números">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small fw-bold">E-mail</label>
+              <input id="opEmail" class="form-control" placeholder="email@dominio.com">
             </div>
             <div class="col-md-2">
               <label class="form-label small fw-bold">Usuário</label>
@@ -499,12 +508,12 @@
       <section id="tabOrdem" class="tabPane d-none">
         <div class="cardx p-3">
           <div class="fw-bold fs-5">Ordem do Dia / Questões</div>
-          <div class="smallnote">Cole itens por vírgula. Em cada item, crie questões (1.1, 1.2...) com opções. Se já tiver voto, não edita: crie novo subitem.</div>
+          <div class="smallnote">Cole itens por ponto e vírgula (;) ou 1 item por linha. Em cada item, crie questões (1.1, 1.2...) com opções. Se já tiver voto, não edita: crie novo subitem.</div>
 
           <div class="row g-2 mt-2">
             <div class="col-md-10">
-              <label class="form-label small fw-bold">Itens (separados por vírgula)</label>
-              <input id="txtItens" class="form-control" placeholder="Ex.: Aprovação de contas, Obras, Eleição síndico">
+              <label class="form-label small fw-bold">Itens (1 por linha ou separados por ;)</label>
+              <input id="txtItens" class="form-control" placeholder="Ex.: Aprovação de contas\nObras\nEleição síndico\n(ou: Aprovação de contas; Obras; Eleição síndico)">
             </div>
             <div class="col-md-2 d-grid">
               <button class="btn btn-rr fw-bold" onclick="criarItensOrdem()">Gerar itens</button>
@@ -550,11 +559,11 @@
                 <div class="fw-bold">Totais</div>
                 <div class="table-responsive mt-2">
                   <table class="table table-sm">
-                    <thead class="table-dark"><tr><th>Opção</th><th>Total apurado</th><th>%</th><th>Votantes (registros)</th></tr></thead>
+                    <thead class="table-dark"><tr><th>Opção</th><th>Total apurado</th><th>%</th></tr></thead>
                     <tbody id="tbTotais"></tbody>
                   </table>
                 </div>
-                <div class="smallnote">Clique em “Votantes” para ver quem votou (somente válidos). Admin pode anular voto.</div>
+                <div class="smallnote"></div>
               </div>
             </div>
           </div>
@@ -573,10 +582,16 @@
             <button class="btn btn-outline-secondary btn-sm" onclick="renderPresenca()">Atualizar Presença</button>
             <button class="btn btn-outline-secondary btn-sm" onclick="exportarPresencaCSV()">Exportar Presença CSV</button>
           </div>
+          <div class="mt-2">
+            <label class="d-flex align-items-center gap-2 smallnote">
+              <input type="checkbox" id="chkOcultarPresencaManual" onchange="renderPresenca()">
+              Ocultar marcação de inscrição manual na lista de presença
+            </label>
+          </div>
 
           <hr class="my-3">
 
-          <div class="fw-bold">Lista de presença (validados que acessaram)</div>
+          <div class="fw-bold">Lista de presença (validados que acessaram ou voto manual)</div>
           <div class="table-responsive mt-2">
             <table class="table table-sm align-middle">
               <thead class="table-dark">
@@ -588,7 +603,28 @@
             </table>
           </div>
 
+          
           <hr class="my-3">
+
+          <div class="fw-bold fs-6">Relatório por votação (por questão)</div>
+          <div class="smallnote">Mostra os votos agrupados por opção, na ordem cadastrada. Atualiza ao trocar UNIDADE/FRAÇÃO.</div>
+
+          <div class="row g-2 mt-2 align-items-end">
+            <div class="col-md-6">
+              <label class="form-label small fw-bold">Questão</label>
+              <select id="selRelQuestao" class="form-select" onchange="renderRelatorioPorQuestao()"></select>
+            </div>
+            <div class="col-md-6">
+              <label class="d-flex align-items-center gap-2 smallnote mt-4">
+                <input type="checkbox" id="chkOcultarAutorManualRel" onchange="renderRelatorioPorQuestao()">
+                Ocultar quem lançou voto manual
+              </label>
+            </div>
+          </div>
+
+          <div id="relPorQuestaoBox" class="mt-3"></div>
+
+<hr class="my-3">
 
           <div class="fw-bold d-flex align-items-center justify-content-between flex-wrap gap-2">
             <span>Votos (detalhado)</span>
@@ -628,7 +664,7 @@
       </div>
       <div class="d-flex gap-2">
         <button class="btn btn-sm btn-outline-dark" onclick="moradorLogout()">Trocar usuário</button>
-        <button class="btn btn-sm btn-dark" onclick="voltarAdmin()">Voltar ao ADM</button>
+        <button class="btn btn-sm btn-dark" id="btnVoltarAdmin" onclick="voltarAdmin()">Voltar ao ADM</button>
       </div>
     </div>
 
@@ -732,7 +768,44 @@
     </div>
   </div>
 
-  <!-- MODAL MINHA SENHA -->
+  
+<!-- MODAL VOTO MANUAL -->
+<div class="modal fade" id="modalVotoManual" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Voto manual (assembleia aberta)</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="smallnote">
+          Permitido enquanto a <b>assembleia estiver ABERTA</b>, com a questão <b>ABERTA ou FECHADA</b>.
+          O voto manual entra na apuração normalmente (UNIDADE/FRAÇÃO) e aparece nos relatórios.
+        </div>
+
+        <div class="row g-2 mt-2">
+          <div class="col-md-6">
+            <label class="form-label small fw-bold">Unidade (ainda não votou)</label>
+            <select id="vmSelUnidade" class="form-select" onchange="vmEscolherUnidade(this.value)"></select>
+            <div class="smallnote mt-1" id="vmStatusUnidade"></div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-bold">Opção de voto</label>
+            <div id="vmOps" class="border rounded p-2 bg-light"></div>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 mt-3">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-rr fw-bold" onclick="gravarVotoManual()">Gravar voto</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MINHA SENHA -->
   <div class="modal fade" id="modalMinhaSenha" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content">
@@ -762,7 +835,66 @@
     </div>
   </div>
 
-  <canvas id="qrCanvasTemp" class="d-none"></canvas>
+  
+  <!-- MODAL ESQUECI SENHA -->
+  <div class="modal fade" id="modalEsqueciSenha" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Recuperar senha</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="smallnote mb-2">Informe seu <b>usuário</b> e confirme com <b>CPF</b> e/ou <b>e-mail</b> cadastrados.</div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Usuário</label>
+            <input id="fpUser" class="form-control" placeholder="ex.: operador1">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">CPF</label>
+            <input id="fpCpf" class="form-control" placeholder="somente números">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">E-mail</label>
+            <input id="fpEmail" class="form-control" placeholder="email@dominio.com">
+          </div>
+          <div class="d-grid mt-3">
+            <button class="btn btn-rr fw-bold" onclick="solicitarResetSenha()">Enviar link de redefinição</button>
+          </div>
+          <div class="smallnote mt-3" id="fpMsg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL RESET SENHA (via link) -->
+  <div class="modal fade" id="modalResetSenha" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Definir nova senha</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="smallnote mb-2">Crie sua nova senha.</div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Nova senha</label>
+            <input id="rpNova" type="password" class="form-control">
+          </div>
+          <div class="mb-2">
+            <label class="form-label small fw-bold">Confirmar nova senha</label>
+            <input id="rpConf" type="password" class="form-control">
+          </div>
+          <div class="d-grid mt-3">
+            <button class="btn btn-rr fw-bold" onclick="aplicarResetSenha()">Salvar nova senha</button>
+          </div>
+          <div class="smallnote mt-3" id="rpMsg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<canvas id="qrCanvasTemp" class="d-none"></canvas>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -956,9 +1088,38 @@ async function supaSaveState(){
     function validarLogin(){
       const u = (document.getElementById("loginUser").value||"").trim();
       const p = (document.getElementById("loginPass").value||"").trim();
-      const found = (STATE.operadores||[]).find(x =>
+
+      // Recuperacao de acesso (sem apagar dados):
+      // E comum ficar com STATE antigo no localStorage e perder o MASTER padrao.
+      let found = (STATE.operadores||[]).find(x =>
         (x.user||"").toLowerCase() === u.toLowerCase() && x.pass === p
       );
+
+      if(!found){
+        const isDefaultMaster = (u.toLowerCase()==="master" && p==="master");
+        if(isDefaultMaster){
+          const masterById = (STATE.operadores||[]).find(o=>o.id==="O_MASTER");
+          const masterByUser = (STATE.operadores||[]).find(o=>(o.user||"").toLowerCase()==="master");
+          const master = masterById || masterByUser || null;
+
+          if(!master){
+            if(!confirm("Acesso MASTER nao encontrado neste navegador. Deseja recriar o usuario master/master agora? (Nao apaga dados)")) return;
+            if(!STATE.operadores) STATE.operadores = [];
+            STATE.operadores.unshift({ id:"O_MASTER", nome:"Master", user:"master", pass:"master", role:"MASTER" });
+            saveState();
+            found = STATE.operadores.find(o=>o.id==="O_MASTER");
+          }else if(master.pass !== "master"){
+            if(!confirm("O usuario MASTER existe, mas a senha esta diferente. Deseja redefinir para master e entrar? (Nao apaga dados)")) return;
+            master.pass = "master";
+            master.user = "master";
+            master.role = "MASTER";
+            if(!master.id) master.id = "O_MASTER";
+            saveState();
+            found = master;
+          }
+        }
+      }
+
       if(!found) return alert("Usuário ou senha inválidos.");
       SESSION.operador = found;
       persistSession();
@@ -997,6 +1158,121 @@ async function supaSaveState(){
       alert("Senha alterada com sucesso!");
       bootstrap.Modal.getInstance(document.getElementById("modalMinhaSenha")).hide();
     }
+
+
+    // =========================
+    // Recuperação de senha por e-mail (sem backend: link com token)
+    // - Online (Netlify): envia via mailto com link contendo token
+    // - Offline (file://): mostra o token para copiar e colar
+    // =========================
+    const PWD = { token:null };
+
+    function abrirEsqueciSenhaModal(){
+      ["fpUser","fpCpf","fpEmail"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+      const msg = document.getElementById("fpMsg"); if(msg) msg.innerHTML = "";
+      new bootstrap.Modal(document.getElementById("modalEsqueciSenha")).show();
+    }
+
+    function ensurePwdStore(){
+      if(!STATE.passwordResets) STATE.passwordResets = []; // {token, opId, exp}
+    }
+
+    function solicitarResetSenha(){
+      const user = (document.getElementById("fpUser").value||"").trim();
+      const cpf = normCPF(document.getElementById("fpCpf").value||"");
+      const email = normEmail(document.getElementById("fpEmail").value||"");
+      const msg = document.getElementById("fpMsg");
+
+      if(!user) { if(msg) msg.innerHTML = '<span class="text-danger">Informe o usuário.</span>'; return; }
+
+      const op = (STATE.operadores||[]).find(o => (o.user||"").toLowerCase()===user.toLowerCase());
+      if(!op){
+        if(msg) msg.innerHTML = '<span class="text-danger">Usuário não encontrado.</span>';
+        return;
+      }
+
+      const needCpf = !!(op.cpf);
+      const needEmail = !!(op.email);
+
+      if(needCpf && cpf && op.cpf !== cpf){
+        if(msg) msg.innerHTML = '<span class="text-danger">CPF não confere.</span>';
+        return;
+      }
+      if(needEmail && email && normEmail(op.email) !== email){
+        if(msg) msg.innerHTML = '<span class="text-danger">E-mail não confere.</span>';
+        return;
+      }
+
+      if((needCpf && !cpf) && (needEmail && !email)){
+        if(msg) msg.innerHTML = '<span class="text-danger">Informe CPF e/ou e-mail cadastrados.</span>';
+        return;
+      }
+
+      const token = uuid("RST").replaceAll("_","").slice(0,18);
+      const exp = Date.now() + (30*60*1000); // 30 min
+      ensurePwdStore();
+      STATE.passwordResets.push({ token, opId: op.id, exp });
+      saveState();
+
+      const origin = (location.origin && location.origin!=="null") ? location.origin : "";
+      const base = origin ? (origin + location.pathname) : "";
+      const link = (base ? base : "(este arquivo)") + "#reset=" + encodeURIComponent(token);
+
+      const toSend = email || op.email || "";
+      if(toSend){
+        const to = encodeURIComponent(toSend);
+        const subj = encodeURIComponent("RR DIGIVOTE - Redefinição de senha");
+        const body = encodeURIComponent("Olá!\n\nPara redefinir sua senha, acesse o link abaixo (válido por 30 min):\n\n" + link + "\n\nSe você não solicitou, ignore este e-mail.");
+        window.location.href = `mailto:${to}?subject=${subj}&body=${body}`;
+        if(msg) msg.innerHTML = '<span class="text-success">Abrimos seu e-mail para enviar o link de redefinição.</span>';
+      } else {
+        if(msg) msg.innerHTML = '<span class="text-warning">E-mail não cadastrado para este usuário. Token gerado:</span> <b>' + token + '</b>';
+      }
+    }
+
+    function checkResetHash(){
+      const m = (location.hash||"").match(/reset=([^&]+)/);
+      if(!m || !m[1]) return;
+      const token = decodeURIComponent(m[1]);
+      ensurePwdStore();
+      STATE.passwordResets = (STATE.passwordResets||[]).filter(x=> (x.exp||0) > Date.now());
+      const rec = (STATE.passwordResets||[]).find(x=>x.token===token);
+      saveState();
+      if(!rec){
+        alert("Link de redefinição inválido ou expirado.");
+        return;
+      }
+      PWD.token = token;
+      ["rpNova","rpConf"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
+      const msg = document.getElementById("rpMsg"); if(msg) msg.innerHTML = "";
+      new bootstrap.Modal(document.getElementById("modalResetSenha")).show();
+    }
+
+    function aplicarResetSenha(){
+      const nova = (document.getElementById("rpNova").value||"").trim();
+      const conf = (document.getElementById("rpConf").value||"").trim();
+      const msg = document.getElementById("rpMsg");
+
+      if(!PWD.token) { if(msg) msg.innerHTML = '<span class="text-danger">Token ausente.</span>'; return; }
+      if(!nova || nova.length < 3){ if(msg) msg.innerHTML = '<span class="text-danger">Senha muito curta.</span>'; return; }
+      if(nova !== conf){ if(msg) msg.innerHTML = '<span class="text-danger">Confirmação não confere.</span>'; return; }
+
+      ensurePwdStore();
+      STATE.passwordResets = (STATE.passwordResets||[]).filter(x=> (x.exp||0) > Date.now());
+      const rec = (STATE.passwordResets||[]).find(x=>x.token===PWD.token);
+      if(!rec){ if(msg) msg.innerHTML = '<span class="text-danger">Token inválido ou expirado.</span>'; return; }
+
+      const op = (STATE.operadores||[]).find(o=>o.id===rec.opId);
+      if(!op){ if(msg) msg.innerHTML = '<span class="text-danger">Usuário não encontrado.</span>'; return; }
+
+      op.pass = nova;
+      STATE.passwordResets = (STATE.passwordResets||[]).filter(x=>x.token!==PWD.token);
+      saveState();
+
+      if(msg) msg.innerHTML = '<span class="text-success">Senha alterada com sucesso! Você já pode fazer login.</span>';
+      setTimeout(()=>{ location.hash = ""; }, 600);
+    }
+
 
     // =========================
     // Helpers
@@ -1051,7 +1327,7 @@ async function supaSaveState(){
       if(tabId === "tabCheckin") renderCheckin();
       if(tabId === "tabOrdem") renderOrdem();
       if(tabId === "tabResultados") renderResultadosInit();
-      if(tabId === "tabRelatorios") { renderPresenca(); renderVotosDetalhe(); }
+      if(tabId === "tabRelatorios") { renderPresenca(); renderRelatorioPorQuestaoInit(); renderVotosDetalhe(); }
     }
 
     // =========================
@@ -1073,6 +1349,7 @@ async function supaSaveState(){
       renderOrdem();
       renderResultadosInit();
       renderPresenca();
+      renderRelatorioPorQuestaoInit();
       renderVotosDetalhe();
       updateBadges();
     }
@@ -1182,6 +1459,8 @@ async function supaSaveState(){
         return alert("Somente MASTER pode criar ADMIN/MASTER.");
       }
       const nome = (document.getElementById("opNome").value||"").trim();
+      const cpf  = normCPF(document.getElementById("opCpf")?.value||"");
+      const email = normEmail(document.getElementById("opEmail")?.value||"");
       const user = (document.getElementById("opUser").value||"").trim();
       const pass = (document.getElementById("opPass").value||"").trim();
 
@@ -1195,6 +1474,8 @@ async function supaSaveState(){
         if(dup) return alert("Usuário já existe.");
 
         o.nome = nome;
+        o.cpf = cpf;
+        o.email = email;
         o.user = user;
         o.role = role;
         // senha só altera se digitou
@@ -1204,7 +1485,7 @@ async function supaSaveState(){
         if((STATE.operadores||[]).some(o => (o.user||"").toLowerCase()===user.toLowerCase())){
           return alert("Usuário já existe.");
         }
-        STATE.operadores.push({ id: uuid("O"), nome, user, pass, role });
+        STATE.operadores.push({ id: uuid("O"), nome, cpf, email, user, pass, role });
       }
 
       saveState();
@@ -1218,6 +1499,8 @@ async function supaSaveState(){
       if(!o) return;
       EDIT.operadorId = id;
       document.getElementById("opNome").value = o.nome||"";
+      document.getElementById("opCpf").value = o.cpf||"";
+      document.getElementById("opEmail").value = o.email||"";
       document.getElementById("opUser").value = o.user||"";
       document.getElementById("opPass").value = ""; // nunca exibir senha
       document.getElementById("opRole").value = (o.role||"OPERADOR");
@@ -1225,7 +1508,7 @@ async function supaSaveState(){
     }
 
     function limparOperadorForm(){
-      ["opNome","opUser","opPass"].forEach(id=>document.getElementById(id).value="");
+      ["opNome","opCpf","opEmail","opUser","opPass"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
       document.getElementById("opRole").value = "OPERADOR";
       EDIT.operadorId = null;
       document.getElementById("opEditHint").innerText = "";
@@ -1401,6 +1684,62 @@ async function supaSaveState(){
       saveState();
       updateBadges();
       renderResultados();
+      renderVotosDetalhe();
+    }
+
+
+    // Lista de votantes por opção (Resultados)
+    function mostrarQuemVotouResultado(opcao){
+      const a = getAssembleia();
+      const cliId = STATE.clienteAtivoId;
+      const qid = document.getElementById("selQuestaoResultado").value;
+      const box = document.getElementById("quemVotouBox");
+      if(!a || !cliId || !qid) return;
+      ensureAssembleiaRuntime(a);
+      const modoAp = (a.apuracao||"UNIDADE");
+      const votos = (a.votos||[]).filter(v=>v.questaoId===qid && !v.anulado && v.opcao===opcao);
+      const listU = getUnidadesCliente(cliId);
+
+      const totalAp = votos.reduce((acc,v)=> acc + (modoAp==="FRACAO" ? Number(v.pesoFracao||0) : Number(v.pesoUnidade||1)), 0);
+
+      const rows = votos.slice().sort((x,y)=>(x.ts||"").localeCompare(y.ts||""))
+        .map(v=>{
+          const u = listU.find(x=>unitKey(x)===v.unidadeKey);
+          const w = (modoAp==="FRACAO") ? Number(v.pesoFracao||0).toFixed(6) : String(Number(v.pesoUnidade||1));
+          const reps = (v.representadas && v.representadas.length) ? v.representadas.join(", ") : "-";
+          const origem = (v.tipo==="MANUAL") ? `<span class="badge text-bg-warning">MANUAL</span>` : `<span class="badge text-bg-secondary">NORMAL</span>`;
+          return `<tr>
+            <td><b>${escapeHtml(v.unidadeKey)}</b><div class="smallnote">${escapeHtml(u?.nome||"")}</div></td>
+            <td>${w}</td>
+            <td class="smallnote">${escapeHtml(reps)}</td>
+            <td>${origem}</td>
+            <td class="smallnote">${fmtDT(v.ts)}</td>
+          </tr>`;
+        }).join("");
+
+      box.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <div class="fw-bold">Quem votou em: ${escapeHtml(opcao)}</div>
+            <div class="smallnote">Total apurado (${modoAp}): <b>${modoAp==="FRACAO" ? totalAp.toFixed(6) : totalAp}</b> • Registros: <b>${votos.length}</b></div>
+          </div>
+          <button class="btn btn-sm btn-outline-secondary" onclick="fecharQuemVotouResultado()">Fechar</button>
+        </div>
+        <div class="table-responsive mt-2">
+          <table class="table table-sm align-middle">
+            <thead class="table-dark"><tr><th>Unidade</th><th>Peso</th><th>Representa</th><th>Origem</th><th>Data/hora</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="5" class="smallnote">Sem votos.</td></tr>`}</tbody>
+          </table>
+        </div>
+        <div class="smallnote">Para anular votos, use o Relatório detalhado.</div>
+      `;
+      box.classList.remove("d-none");
+      box.scrollIntoView({behavior:"smooth", block:"start"});
+    }
+    function fecharQuemVotouResultado(){
+      const box = document.getElementById("quemVotouBox");
+      box.classList.add("d-none");
+      box.innerHTML = "";
     }
 
     function toggleAssembleiaAtiva(){
@@ -1676,9 +2015,43 @@ async function supaSaveState(){
 
     function parseFrac(v){
       if(v===null || v===undefined) return 0;
-      const s = String(v).trim().replace(/\./g,"").replace(",",".");
+      // aceita: número (0.025), pt-BR (0,025), percentual (2,5% ou 2.5%), fração (25/1000)
+      if(typeof v === "number" && isFinite(v)) return v;
+
+      let s = String(v).trim();
+      if(!s) return 0;
+
+      // fração tipo "25/1000"
+      if(s.includes("/")){
+        const parts = s.split("/").map(x=>x.trim());
+        if(parts.length===2){
+          const a = Number(parts[0].replace(",", "."));
+          const b = Number(parts[1].replace(",", "."));
+          if(isFinite(a) && isFinite(b) && b!==0) return a/b;
+        }
+      }
+
+      // percentual
+      const isPct = s.includes("%");
+      s = s.replace("%","").trim();
+
+      // normaliza separadores
+      const hasComma = s.includes(",");
+      const hasDot = s.includes(".");
+      if(hasComma && hasDot){
+        // assume pt-BR: "." milhar e "," decimal
+        s = s.replace(/\./g,"").replace(",",".");
+      } else if(hasComma && !hasDot){
+        // decimal com vírgula
+        s = s.replace(",",".");
+      } else {
+        // decimal com ponto (ou inteiro) — não remover ponto
+      }
+
+      s = s.replace(/\s+/g,"");
       const n = Number(s);
-      return isNaN(n) ? 0 : n;
+      if(!isFinite(n)) return 0;
+      return isPct ? (n/100) : n;
     }
 
     function csvToRows(text){
@@ -1868,12 +2241,22 @@ async function supaSaveState(){
       const a = getAssembleia(); if(!a) return alert("Selecione uma assembleia.");
       ensureAssembleiaRuntime(a);
       const raw = (document.getElementById("txtItens").value||"").trim();
-      if(!raw) return alert("Informe itens separados por vírgula.");
-      const itens = raw.split(",").map(x=>x.trim()).filter(Boolean);
+      if(!raw) return alert("Informe os itens (1 por linha ou separados por ;).");
+
+      // NOVO: itens por linha (recomendado) ou por ponto-e-vírgula.
+      // Não usamos vírgula como separador para não quebrar textos longos.
+      const byLine = raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      const itens = (byLine.length > 1)
+        ? byLine
+        : raw.split(";").map(x=>x.trim()).filter(Boolean);
+
+      if(!itens.length) return alert("Nada para gerar. Digite 1 item por linha (ou separe por ;).");
+
       itens.forEach((t)=>{
         const num = (a.itens.length + 1);
         a.itens.push({ id: uuid("IT"), titulo: `${num}. ${t}`, questoes: [] });
       });
+
       document.getElementById("txtItens").value = "";
       saveState();
       renderOrdem();
@@ -1901,6 +2284,7 @@ async function supaSaveState(){
           const locked = votCount>0;
           const st = q.aberta ? `<span class="badge text-bg-success">ABERTA</span>` : `<span class="badge text-bg-secondary">FECHADA</span>`;
           const oc = q.oculta ? `<span class="badge text-bg-warning text-dark">OCULTA</span>` : ``;
+          const podeManual = (a.status==="ABERTA") && isAdminLike();
 
           return `<div class="border rounded p-2 mt-2">
             <div class="d-flex justify-content-between flex-wrap gap-2">
@@ -1914,6 +2298,7 @@ async function supaSaveState(){
                 <button class="btn btn-sm btn-outline-secondary" onclick="moverQuestao('${it.id}','${q.id}',-1)" ${qi===0?'disabled':''}><i class="bi bi-arrow-up"></i></button>
                 <button class="btn btn-sm btn-outline-secondary" onclick="moverQuestao('${it.id}','${q.id}',+1)" ${qi===qs.length-1?'disabled':''}><i class="bi bi-arrow-down"></i></button>
                 <button class="btn btn-sm ${q.aberta?'btn-outline-secondary':'btn-ok'}" onclick="toggleQuestaoAberta('${q.id}')">${q.aberta?'Fechar':'Liberar'}</button>
+                ${podeManual?`<button class="btn btn-sm btn-outline-primary" onclick="abrirVotoManual('${q.id}')"><i class="bi bi-pencil-square"></i> Voto manual</button>`:''}
                 <button class="btn btn-sm ${q.oculta?'btn-outline-secondary':'btn-warn'}" onclick="toggleQuestaoOculta('${q.id}')">${q.oculta?'Mostrar':'Ocultar'}</button>
                 <button class="btn btn-sm btn-outline-danger" onclick="excluirQuestao('${it.id}','${q.id}')"><i class="bi bi-x-lg"></i></button>
               </div>
@@ -1927,6 +2312,26 @@ async function supaSaveState(){
                 </div>
                 <div class="col-md-7">
                   <div id="qOps_${q.id}"></div>
+                  <div class="mt-1">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="qMulti_${q.id}" ${q.multi?'checked':''} ${locked?'disabled':''} onchange="toggleQuestaoMulti('${q.id}')">
+                      <label class="form-check-label small" for="qMulti_${q.id}"><b>Voto múltiplo</b> (padrão: voto único)</label>
+                    </div>
+                    <div id="qMultiCfg_${q.id}" class="${q.multi?'':'d-none'} mt-1">
+                      <div class="d-flex gap-2 flex-wrap align-items-center">
+                        <label class="smallnote mb-0">Modo</label>
+                        <select class="form-select form-select-sm" style="max-width:170px" id="qMultiModo_${q.id}" ${locked?'disabled':''} onchange="onQuestaoMultiCfgChange('${q.id}')">
+                          <option value="TODOS" ${q.multiModo==='TODOS'?'selected':''}>Todos</option>
+                          <option value="LIMITAR" ${q.multiModo!=='TODOS'?'selected':''}>Limitar</option>
+                        </select>
+                        <label class="smallnote mb-0">Máx escolhas</label>
+                        <select class="form-select form-select-sm" style="max-width:120px" id="qMax_${q.id}" ${locked?'disabled':''}>
+                          ${[2,3,4,5].map(n=>`<option value="${n}" ${(Number(q.maxEscolhas||2)===n)?'selected':''}>${n}</option>`).join('')}
+                        </select>
+                      </div>
+                      <div class="smallnote">“Todos” permite marcar quantas opções quiser (até todas). “Limitar” restringe ao máximo escolhido.</div>
+                    </div>
+                  </div>
                   ${locked?`<div class="smallnote text-danger mt-1">Questão travada (já possui votos). Crie novo subitem para alterar.</div>`:""}
                 </div>
               </div>
@@ -1957,6 +2362,7 @@ async function supaSaveState(){
               <button class="btn btn-outline-danger" onclick="delOpcao('${q.id}',${idx})"><i class="bi bi-x-lg"></i></button>
             </div>
           `).join("") || `<div class="smallnote">Sem opções. Clique em “Opção”.</div>`;
+          onQuestaoMultiCfgChange(q.id);
         });
       });
     }
@@ -1967,7 +2373,7 @@ async function supaSaveState(){
       const it = a.itens.find(x=>x.id===itemId); if(!it) return;
       const base = it.titulo.split(".")[0].trim();
       const next = (it.questoes?.length||0) + 1;
-      const q = { id: uuid("Q"), titulo: `${base}.${next} Nova questão`, opcoes: ["SIM","NÃO","ABSTENÇÃO"], aberta: false, oculta: false };
+      const q = { id: uuid("Q"), titulo: `${base}.${next} Nova questão`, opcoes: ["SIM","NÃO","ABSTENÇÃO"], aberta: false, oculta: false, multi: false, multiModo: "LIMITAR", maxEscolhas: 1 };
       it.questoes.push(q);
       saveState();
       renderOrdem();
@@ -2020,6 +2426,36 @@ async function supaSaveState(){
       renderMoradorVotacoes();
     }
 
+    function toggleQuestaoMulti(qId){
+      const a = getAssembleia(); if(!a) return;
+      ensureAssembleiaRuntime(a);
+      const q = findQuestao(a,qId); if(!q) return;
+
+      const votCount = (a.votos||[]).filter(v=>v.questaoId===qId && !v.anulado).length;
+      if(votCount>0) return alert("Questão travada.");
+
+      const el = document.getElementById(`qMulti_${qId}`);
+      q.multi = !!el?.checked;
+      if(!q.multi){
+        q.multiModo = "LIMITAR";
+        q.maxEscolhas = 1;
+      } else {
+        if(!q.multiModo) q.multiModo = "LIMITAR";
+        if(!q.maxEscolhas || q.maxEscolhas<2) q.maxEscolhas = 2;
+      }
+      saveState();
+      renderOrdem();
+      renderMoradorVotacoes();
+    }
+
+    function onQuestaoMultiCfgChange(qId){
+      const modoEl = document.getElementById(`qMultiModo_${qId}`);
+      const maxEl  = document.getElementById(`qMax_${qId}`);
+      const modo = (modoEl?.value || "LIMITAR");
+      if(maxEl) maxEl.disabled = (modo === "TODOS");
+    }
+
+
     function salvarQuestaoEdicao(itemId, qId){
       const a = getAssembleia(); if(!a) return;
       ensureAssembleiaRuntime(a);
@@ -2040,6 +2476,22 @@ async function supaSaveState(){
         }
       });
       q.opcoes = newOps;
+
+      // voto múltiplo (por questão)
+      const elMulti = document.getElementById(`qMulti_${qId}`);
+      const multi = !!elMulti?.checked;
+      q.multi = multi;
+      if(!multi){
+        q.multiModo = "LIMITAR";
+        q.maxEscolhas = 1;
+      } else {
+        const modoEl = document.getElementById(`qMultiModo_${qId}`);
+        const maxEl  = document.getElementById(`qMax_${qId}`);
+        q.multiModo = (modoEl?.value || "LIMITAR");
+        const maxN = parseInt(maxEl?.value || "2", 10);
+        q.maxEscolhas = (Number.isFinite(maxN) ? Math.min(5, Math.max(2, maxN)) : 2);
+      }
+
       saveState();
       renderOrdem();
       renderResultadosInit();
@@ -2125,6 +2577,9 @@ async function supaSaveState(){
       document.getElementById("adminRoot").style.display = "none";
       document.getElementById("moradorRoot").style.display = "block";
       prepararMoradorUI();
+      MORADOR.only = false;
+      const b = document.getElementById('btnVoltarAdmin');
+      if(b) b.style.display = '';
     }
     function voltarAdmin(){
       document.getElementById("moradorRoot").style.display = "none";
@@ -2153,6 +2608,9 @@ async function supaSaveState(){
           document.getElementById("moradorRoot").style.display = "block";
           MORADOR.assembleiaId = a.id;
           MORADOR.clienteId = a.clienteId;
+          MORADOR.only = true;
+          const b = document.getElementById('btnVoltarAdmin');
+          if(b) b.style.display = 'none';
         }
       }
     }
@@ -2239,6 +2697,22 @@ async function supaSaveState(){
       montarPainelMorador();
     }
 
+
+    // Presença por voto manual (sem precisar login morador)
+    function registrarPresencaManual(a, cliId, unidadeKey){
+      try{
+        ensureAssembleiaRuntime(a);
+        const listU = getUnidadesCliente(cliId);
+        const u = listU.find(x=>unitKey(x)===unidadeKey);
+        const cpf = u?.cpf || "";
+        const email = u?.email || "";
+        const already = (a.presencas||[]).some(p => p.unidadeKey===unidadeKey);
+        if(!already){
+          a.presencas.push({ unidadeKey, ts: nowISO(), cpf, email, tipo:"MANUAL", por:(SESSION.operador?.user||SESSION.operador?.nome||"") });
+        }
+      }catch(e){ console.error(e); }
+    }
+
     function montarPainelMorador(){
       const a = getMoradorAssembleia();
       const c = getMoradorCliente();
@@ -2301,10 +2775,13 @@ async function supaSaveState(){
       host.innerHTML = questoes.map((obj)=>{
         const q = obj.q;
         const it = obj.item;
-        const lastVote = (a.votos||[]).slice().reverse().find(v=>v.questaoId===q.id && v.unidadeKey===MORADOR.unidadeKey) || null;
-        const lastTxt = lastVote
-          ? (lastVote.anulado ? `<span class="badge text-bg-danger">ANULADO</span>` : `<span class="badge text-bg-success">Último voto: ${escapeHtml(lastVote.opcao)}</span>`)
-          : `<span class="smallnote">Você ainda não votou nesta questão.</span>`;
+        const votesAll = (a.votos||[]).filter(v=>v.questaoId===q.id && v.unidadeKey===MORADOR.unidadeKey);
+        const votesValid = votesAll.filter(v=>!v.anulado);
+        const selectedOps = [...new Set(votesValid.map(v=>v.opcao))];
+
+        const lastTxt = selectedOps.length
+          ? `<span class="badge text-bg-success">Último voto: ${selectedOps.map(x=>escapeHtml(x)).join(", ")}</span>`
+          : (votesAll.length ? `<span class="badge text-bg-danger">ANULADO</span>` : `<span class="smallnote">Você ainda não votou nesta questão.</span>`);
 
         const ops = (q.opcoes||[]).map(op=>{
           return `<div class="opt" data-qid="${q.id}" data-op="${escapeAttr(op)}" onclick="moradorSelecionar('${q.id}','${escapeJS(op)}', this)">
@@ -2326,13 +2803,15 @@ async function supaSaveState(){
 
       // pré-seleciona último voto válido
       questoes.forEach(({q})=>{
-        const lastValid = (a.votos||[]).slice().reverse().find(v=>v.questaoId===q.id && v.unidadeKey===MORADOR.unidadeKey && !v.anulado);
-        if(lastValid){
-          MORADOR_SELECTED[q.id] = lastValid.opcao;
+        const valids = (a.votos||[]).filter(v=>v.questaoId===q.id && v.unidadeKey===MORADOR.unidadeKey && !v.anulado);
+        const ops = [...new Set(valids.map(v=>v.opcao))];
+        if(ops.length){
+          MORADOR_SELECTED[q.id] = ops;
           const card = document.getElementById(`card_${q.id}`);
           if(card){
             card.querySelectorAll(".opt").forEach(el=>{
-              el.classList.toggle("selected", el.getAttribute("data-op")===lastValid.opcao);
+              const op = el.getAttribute("data-op");
+              el.classList.toggle("selected", ops.includes(op));
             });
           }
         }
@@ -2340,10 +2819,40 @@ async function supaSaveState(){
     }
 
     function moradorSelecionar(qid, opcao, el){
-      MORADOR_SELECTED[qid] = opcao;
+      const a = getMoradorAssembleia();
+      if(!a) return;
+      ensureAssembleiaRuntime(a);
+      const q = findQuestao(a, qid);
+      if(!q) return;
+
       const card = document.getElementById(`card_${qid}`);
       if(!card) return;
-      card.querySelectorAll(".opt").forEach(o=>o.classList.remove("selected"));
+
+      const isMulti = !!q.multi;
+      if(!isMulti){
+        MORADOR_SELECTED[qid] = [opcao];
+        card.querySelectorAll(".opt").forEach(o=>o.classList.remove("selected"));
+        el.classList.add("selected");
+        return;
+      }
+
+      // múltiplo: alterna seleção e aplica limite
+      const modo = (q.multiModo || "LIMITAR");
+      const limite = (modo==="TODOS") ? (q.opcoes||[]).length : Math.min(5, Math.max(2, Number(q.maxEscolhas||2)));
+
+      if(!Array.isArray(MORADOR_SELECTED[qid])) MORADOR_SELECTED[qid] = [];
+      const arr = MORADOR_SELECTED[qid];
+
+      const i = arr.indexOf(opcao);
+      if(i>=0){
+        arr.splice(i,1);
+        el.classList.remove("selected");
+        return;
+      }
+      if(arr.length >= limite){
+        return alert(`Você pode selecionar no máximo ${limite} opção(ões).`);
+      }
+      arr.push(opcao);
       el.classList.add("selected");
     }
 
@@ -2361,37 +2870,55 @@ async function supaSaveState(){
       const q = findQuestao(a, qid);
       if(!q || !q.aberta) return alert(MSG_BLOQUEADO);
 
-      const opcao = MORADOR_SELECTED[qid];
-      if(!opcao) return alert("Selecione uma opção.");
+      const isMulti = !!q.multi;
+      const sel = Array.isArray(MORADOR_SELECTED[qid]) ? MORADOR_SELECTED[qid].slice() : [];
+      if(!sel.length) return alert(isMulti ? "Selecione pelo menos uma opção." : "Selecione uma opção.");
+
+      if(isMulti){
+        const modo = (q.multiModo || "LIMITAR");
+        const limite = (modo==="TODOS") ? (q.opcoes||[]).length : Math.min(5, Math.max(2, Number(q.maxEscolhas||2)));
+        if(sel.length > limite) return alert(`Selecione no máximo ${limite} opção(ões).`);
+      }
 
       const snap = calcPesoSnapshot(a, c.id, MORADOR.unidadeKey);
 
-      const lastValidIdx = findLastValidVoteIndex(a, qid, MORADOR.unidadeKey);
-      if(lastValidIdx>=0){
-        a.votos[lastValidIdx].anulado = true;
-        a.votos[lastValidIdx].anuladoPor = "ALTERACAO";
-        a.votos[lastValidIdx].anuladoTs = nowISO();
-      }
+      // anula todos os votos válidos anteriores desta unidade nesta questão (suporta voto múltiplo)
+      anularVotosValidosDaUnidade(a, qid, MORADOR.unidadeKey, "ALTERACAO");
 
-      a.votos.push({
-        id: uuid("V"),
-        questaoId: qid,
-        unidadeKey: MORADOR.unidadeKey,
-        opcao,
-        ts: nowISO(),
-        anulado: false,
-        pesoUnidade: snap.pesoUnidade,
-        pesoFracao: snap.pesoFracao,
-        representadas: snap.representadas
+      // grava 1 registro por opção selecionada (ou 1 no caso de voto único)
+      sel.forEach(opcao=>{
+        a.votos.push({
+          id: uuid("V"),
+          questaoId: qid,
+          unidadeKey: MORADOR.unidadeKey,
+          opcao,
+          ts: nowISO(),
+          anulado: false,
+          pesoUnidade: snap.pesoUnidade,
+          pesoFracao: snap.pesoFracao,
+          representadas: snap.representadas
+        });
       });
 
       saveState();
       const lastBox = document.getElementById(`last_${qid}`);
-      if(lastBox) lastBox.innerHTML = `<span class="badge text-bg-success">Voto registrado: ${escapeHtml(opcao)}</span>`;
+      if(lastBox){
+        const txt = sel.map(x=>escapeHtml(x)).join(", ");
+        lastBox.innerHTML = `<span class="badge text-bg-success">Voto registrado: ${txt}</span>`;
+      }
       alert("Voto registrado com sucesso!");
-      // atualiza resultados no ADM se estiver aberto
       renderResultados();
       renderVotosDetalhe();
+    }
+
+    function anularVotosValidosDaUnidade(a, qid, unidadeKey, por){
+      for(const v of (a.votos||[])){
+        if(v.questaoId===qid && v.unidadeKey===unidadeKey && !v.anulado){
+          v.anulado = true;
+          v.anuladoPor = por || "ALTERACAO";
+          v.anuladoTs = nowISO();
+        }
+      }
     }
 
     function findLastValidVoteIndex(a, qid, unidadeKey){
@@ -2449,9 +2976,151 @@ async function supaSaveState(){
       sel.innerHTML = `<option value="">(selecione)</option>` + qs.map(x=>`<option value="${x.q.id}">${escapeHtml(x.it.titulo||"")} • ${escapeHtml(x.q.titulo||"")}</option>`).join("");
       if(qs.length && !sel.value) sel.value = qs[0].q.id;
       renderResultados();
+      renderRelatorioPorQuestao();
+      renderVotosDetalhe();
     }
 
-    function renderResultados(){
+    
+    // =========================
+    // Relatório por votação (por questão) - Relatórios
+    // =========================
+    function renderRelatorioPorQuestaoInit(){
+      const a = getAssembleia();
+      const sel = document.getElementById("selRelQuestao");
+      if(!sel) return;
+      if(!a){
+        sel.innerHTML = `<option value="">(selecione assembleia)</option>`;
+        document.getElementById("relPorQuestaoBox").innerHTML = `<div class="smallnote">Selecione assembleia.</div>`;
+        return;
+      }
+      ensureAssembleiaRuntime(a);
+
+      const qs = [];
+      for(const it of (a.itens||[])){
+        for(const q of (it.questoes||[])){
+          qs.push({it, q});
+        }
+      }
+
+      sel.innerHTML =
+        `<option value="__ALL__">(todas as questões)</option>` +
+        qs.map(x=>{
+          const itNum = (x.it && x.it.numero!=null && x.it.numero!=="") ? x.it.numero : ((a.itens||[]).indexOf(x.it)+1);
+          const qNum  = (x.q && x.q.numero!=null && x.q.numero!=="") ? x.q.numero : (((x.it.questoes||[]).indexOf(x.q))+1);
+          let prefix = (itNum && qNum) ? `${itNum}.${qNum} • ` : "";
+          // se o título já vier com numeração (ex: "2.1 ..."), não força prefixo "undefined.undefined"
+          const label = `${prefix}${x.q.titulo||""}`.trim();
+          return `<option value="${x.q.id}">${escapeHtml(label)}</option>`;
+        }).join("");
+
+      // mantém seleção se possível
+      if(!sel.value) sel.value = "__ALL__";
+      renderRelatorioPorQuestao();
+    }
+
+    function renderRelatorioPorQuestao(){
+      const a = getAssembleia();
+      const cliId = STATE.clienteAtivoId;
+      const box = document.getElementById("relPorQuestaoBox");
+      const sel = document.getElementById("selRelQuestao");
+      if(!box || !sel) return;
+
+      if(!a || !cliId){
+        box.innerHTML = `<div class="smallnote">Selecione assembleia.</div>`;
+        return;
+      }
+      ensureAssembleiaRuntime(a);
+
+      const modoAp = (a.apuracao||"UNIDADE");
+      const incluirAnulados = !!document.getElementById("chkIncluirAnulados")?.checked;
+      const ocultarAutorManual = !!document.getElementById("chkOcultarAutorManualRel")?.checked;
+
+      const alvo = sel.value || "__ALL__";
+
+      // monta lista de questões na ordem cadastrada
+      const qs = [];
+      for(const it of (a.itens||[])){
+        for(const q of (it.questoes||[])){
+          if(alvo==="__ALL__" || q.id===alvo) qs.push({it, q});
+        }
+      }
+      if(!qs.length){
+        box.innerHTML = `<div class="smallnote">Sem questões.</div>`;
+        return;
+      }
+
+      const listU = getUnidadesCliente(cliId);
+
+      const htmlQs = qs.map(({it,q})=>{
+        const votosQ = (a.votos||[]).filter(v=>v.questaoId===q.id && (incluirAnulados ? true : !v.anulado));
+        const titulo = `${it.numero}.${q.numero} • ${q.titulo||""}`;
+
+        const opcoesOrdenadas = (q.opcoes||[]).slice();
+        // garante que opções "fora da lista" também apareçam no final
+        const extras = Array.from(new Set(votosQ.map(v=>v.opcao))).filter(op=>!opcoesOrdenadas.includes(op));
+        const todasOpcoes = opcoesOrdenadas.concat(extras);
+
+        const blocosOp = todasOpcoes.map(op=>{
+          const vv = votosQ.filter(v=>v.opcao===op);
+          const subtotal = vv.reduce((acc,v)=> acc + (modoAp==="FRACAO" ? Number(v.pesoFracao||0) : Number(v.pesoUnidade||1)), 0);
+          const subtotalTxt = (modoAp==="FRACAO") ? subtotal.toFixed(6) : String(subtotal);
+
+          const linhas = vv.slice().sort((x,y)=>(x.ts||"").localeCompare(y.ts||"")).map(v=>{
+            const u = listU.find(x=>unitKey(x)===v.unidadeKey);
+            const w = (modoAp==="FRACAO") ? Number(v.pesoFracao||0).toFixed(6) : String(Number(v.pesoUnidade||1));
+            const reps = (v.representadas && v.representadas.length) ? v.representadas.join(", ") : "-";
+            const isMan = (v.tipo==="MANUAL");
+            const origem = isMan
+              ? `<span class="badge text-bg-warning">MANUAL</span>${(!ocultarAutorManual && (v.lancadoPor||"")) ? ` <span class="smallnote">(${escapeHtml(v.lancadoPor)})</span>` : ``}`
+              : `<span class="badge text-bg-secondary">NORMAL</span>`;
+            const st = v.anulado ? `<span class="badge text-bg-danger">ANULADO</span>` : `<span class="badge text-bg-success">OK</span>`;
+            return `<tr>
+              <td><b>${escapeHtml(v.unidadeKey)}</b><div class="smallnote">${escapeHtml(u?.nome||"")}</div></td>
+              <td>${w}</td>
+              <td class="smallnote">${escapeHtml(reps)}</td>
+              <td>${origem}</td>
+              <td>${st}</td>
+              <td class="smallnote">${fmtDT(v.ts)}</td>
+            </tr>`;
+          }).join("");
+
+          return `
+            <div class="cardx p-3 mb-2">
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="fw-bold">${escapeHtml(op)}</div>
+                <div class="smallnote">Subtotal (${modoAp}): <b>${subtotalTxt}</b> • Registros: <b>${vv.length}</b></div>
+              </div>
+              <div class="table-responsive mt-2">
+                <table class="table table-sm align-middle">
+                  <thead class="table-dark"><tr><th>Unidade</th><th>Peso</th><th>Representa</th><th>Origem</th><th>Status</th><th>Data/hora</th></tr></thead>
+                  <tbody>
+                    ${linhas || `<tr><td colspan="6" class="smallnote">Sem votos nesta opção.</td></tr>`}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        const totalQ = votosQ.reduce((acc,v)=> acc + (modoAp==="FRACAO" ? Number(v.pesoFracao||0) : Number(v.pesoUnidade||1)), 0);
+        const totalQTxt = (modoAp==="FRACAO") ? totalQ.toFixed(6) : String(totalQ);
+
+        return `
+          <div class="cardx p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div class="fw-bold">${escapeHtml(titulo)}</div>
+              <div class="smallnote">Total apurado (${modoAp}): <b>${totalQTxt}</b> • Registros: <b>${votosQ.length}</b></div>
+            </div>
+            <div class="mt-2">${blocosOp}</div>
+          </div>
+        `;
+      }).join("");
+
+      box.innerHTML = htmlQs;
+    }
+
+
+function renderResultados(){
       const a = getAssembleia();
       const cliId = STATE.clienteAtivoId;
       const qid = document.getElementById("selQuestaoResultado").value;
@@ -2503,11 +3172,10 @@ async function supaSaveState(){
       tbTotais.innerHTML = arr.map(x=>{
         const pct = totalApurado>0 ? (x.total/totalApurado*100) : 0;
         const totalTxt = (modoAp==="FRACAO") ? x.total.toFixed(6) : String(x.total);
-        return `<tr>
+        return `<tr style="cursor:pointer" onclick="mostrarQuemVotouResultado('${escapeJS(x.op)}')">
           <td><b>${escapeHtml(x.op)}</b></td>
-          <td>${totalTxt}</td>
+          <td><a href="#" onclick="mostrarQuemVotouResultado('${escapeJS(x.op)}'); return false;">${totalTxt}</a></td>
           <td>${pct.toFixed(2)}%</td>
-          <td><button class="btn btn-sm btn-outline-dark" onclick="mostrarQuemVotou('${qid}','${escapeJS(x.op)}')">${x.votantes}</button></td>
         </tr>`;
       }).join("");
 
@@ -2603,7 +3271,184 @@ async function supaSaveState(){
       renderVotosDetalhe();
     }
 
-    // =========================
+    
+// =========================
+// Voto manual (admin) - permitido somente para questão FECHADA com assembleia ABERTA
+// =========================
+const VM = { qid:"", unidadeKey:"", opcao:"", opcoes: [] };
+
+function abrirVotoManual(qid){
+  if(!isAdminLike()) return alert("Sem permissão.");
+  const a = getAssembleia();
+  const cliId = STATE.clienteAtivoId;
+  if(!a || !cliId) return alert("Selecione assembleia.");
+  ensureAssembleiaRuntime(a);
+
+  if(a.status!=="ABERTA") return alert("Voto manual só é permitido com a assembleia ABERTA.");
+  const q = findQuestao(a, qid);
+  if(!q) return alert("Questão inválida.");
+
+  VM.qid = qid;
+  VM.unidadeKey = "";
+  VM.opcao = "";
+  VM.opcoes = [];
+  VM.opcoes = [];
+
+  // unidades que ainda NÃO votaram (válidos)
+  const listU = getUnidadesCliente(cliId);
+  const jaVotou = new Set((a.votos||[]).filter(v=>v.questaoId===qid && !v.anulado).map(v=>v.unidadeKey));
+  const disponiveis = listU
+    .map(u=>unitKey(u))
+    .filter(k=>k && !jaVotou.has(k))
+    .sort((x,y)=>x.localeCompare(y));
+
+  const sel = document.getElementById("vmSelUnidade");
+  sel.innerHTML = `<option value="">(selecione)</option>` + disponiveis.map(k=>`<option value="${escapeAttr(k)}">${escapeHtml(k)}</option>`).join("");
+  document.getElementById("vmStatusUnidade").innerHTML = "";
+  renderVotoManualOpcoes(q);
+
+  new bootstrap.Modal(document.getElementById("modalVotoManual")).show();
+}
+
+function vmEscolherUnidade(unidadeKey){
+  VM.unidadeKey = unidadeKey || "";
+  VM.opcao = "";
+
+  const a = getAssembleia();
+  if(!a) return;
+  ensureAssembleiaRuntime(a);
+
+  const stBox = document.getElementById("vmStatusUnidade");
+  if(!VM.unidadeKey){
+    stBox.innerHTML = "";
+    return;
+  }
+
+  const ck = a.checkin[VM.unidadeKey];
+  if(!ck || !ck.validado){
+    stBox.innerHTML = `<span class="text-danger">Unidade NÃO validada no check-in.</span> (Valide para permitir voto manual ou desbloqueie.)`;
+  } else if(ck.debito){
+    stBox.innerHTML = `<span class="text-danger">Unidade com DÉBITO (bloqueada).</span> (Desbloqueie para permitir voto.)`;
+  } else {
+    stBox.innerHTML = `<span class="text-success">Unidade liberada.</span>`;
+  }
+}
+
+function renderVotoManualOpcoes(q){
+  const wrap = document.getElementById("vmOps");
+  const ops = (q?.opcoes||[]);
+  if(!ops.length){
+    wrap.innerHTML = `<div class="smallnote">Sem opções cadastradas.</div>`;
+    return;
+  }
+
+  const isMulti = !!q?.multi;
+  const modo = (q?.multiModo || "LIMITAR");
+  const limite = isMulti ? ((modo==="TODOS") ? ops.length : Math.min(5, Math.max(2, Number(q?.maxEscolhas||2)))) : 1;
+
+  wrap.innerHTML = ops.map(op=>{
+    if(!isMulti){
+      const checked = (VM.opcao===op) ? "checked" : "";
+      return `<label class="d-flex align-items-center gap-2 mb-1">
+        <input type="radio" name="vmOp" value="${escapeAttr(op)}" ${checked} onchange="VM.opcao=this.value">
+        <span>${escapeHtml(op)}</span>
+      </label>`;
+    }
+
+    const checked = (VM.opcoes||[]).includes(op) ? "checked" : "";
+    return `<label class="d-flex align-items-center gap-2 mb-1">
+      <input type="checkbox" value="${escapeAttr(op)}" ${checked} onchange="vmToggleOpcaoMulti('${escapeJS(op)}', ${limite})">
+      <span>${escapeHtml(op)}</span>
+    </label>`;
+  }).join("") + (isMulti ? `<div class="smallnote mt-1">Selecione até <b>${limite}</b> opção(ões).</div>` : "");
+}
+
+
+function vmToggleOpcaoMulti(op, limite){
+  if(!VM.opcoes) VM.opcoes = [];
+  const i = VM.opcoes.indexOf(op);
+  if(i>=0){
+    VM.opcoes.splice(i,1);
+    return;
+  }
+  if(VM.opcoes.length >= limite){
+    alert(`Limite de ${limite} escolha(s) atingido.`);
+    // re-render para desfazer checkbox marcado
+    const a = getAssembleia(); if(!a) return;
+    ensureAssembleiaRuntime(a);
+    const q = findQuestao(a, VM.qid);
+    renderVotoManualOpcoes(q);
+    return;
+  }
+  VM.opcoes.push(op);
+}
+
+function gravarVotoManual(){
+  if(!isAdminLike()) return alert("Sem permissão.");
+  const a = getAssembleia();
+  const cliId = STATE.clienteAtivoId;
+  if(!a || !cliId) return alert("Selecione assembleia.");
+  ensureAssembleiaRuntime(a);
+
+  if(a.status!=="ABERTA") return alert("Voto manual só é permitido com a assembleia ABERTA.");
+  const q = findQuestao(a, VM.qid);
+  if(!q) return alert("Questão inválida.");
+
+  const unidadeKey = (VM.unidadeKey||"").trim();
+  const isMulti = !!q.multi;
+  const selOps = isMulti ? (VM.opcoes||[]).slice() : [ (VM.opcao||"").trim() ].filter(Boolean);
+  if(!unidadeKey) return alert("Selecione uma unidade.");
+  if(!selOps.length) return alert("Selecione pelo menos uma opção.");
+
+  // limite do múltiplo
+  if(isMulti){
+    const modo = (q.multiModo || "LIMITAR");
+    const limite = (modo==="TODOS") ? (q.opcoes||[]).length : Math.min(5, Math.max(2, Number(q.maxEscolhas||2)));
+    if(selOps.length > limite) return alert(`Selecione no máximo ${limite} opção(ões).`);
+  }
+
+  // validação de bloqueio (igual morador)
+  const ck = a.checkin[unidadeKey];
+  if(!ck || !ck.validado) return alert("Unidade NÃO validada no check-in. Valide/desbloqueie para votar.");
+  if(ck.debito) return alert("Unidade com DÉBITO (bloqueada). Desbloqueie para votar.");
+
+  // não permitir duplicar: somente se ainda não votou
+  const ja = (a.votos||[]).some(v=>v.questaoId===VM.qid && v.unidadeKey===unidadeKey && !v.anulado);
+  if(ja) return alert("Esta unidade já possui voto válido nesta questão.");
+
+  // snapshot de peso (inclui agregadas válidas)
+  const snap = calcPesoSnapshot(a, cliId, unidadeKey);
+
+  selOps.forEach(opcao=>{
+    a.votos.push({
+      id: uuid("V"),
+      questaoId: VM.qid,
+      unidadeKey,
+      opcao,
+      ts: nowISO(),
+      anulado: false,
+      pesoUnidade: snap.pesoUnidade,
+      pesoFracao: snap.pesoFracao,
+      representadas: snap.representadas,
+
+      // marcação de voto manual
+      tipo: "MANUAL",
+      lancadoPor: (SESSION.operador?.user || SESSION.operador?.nome || "admin")
+    });
+  });
+
+  // registra presença (inscrição manual) se ainda não existir
+  registrarPresencaManual(a, cliId, unidadeKey);
+
+  saveState();
+  renderOrdem();
+  renderResultados();
+  renderVotosDetalhe();
+  alert("Voto manual registrado com sucesso!");
+  bootstrap.Modal.getInstance(document.getElementById("modalVotoManual"))?.hide();
+}
+
+// =========================
     // Relatórios (opção incluir anulados)
     // =========================
     function renderPresenca(){
@@ -2616,6 +3461,7 @@ async function supaSaveState(){
       }
       ensureAssembleiaRuntime(a);
       const listU = getUnidadesCliente(cliId);
+      const hideManual = !!document.getElementById("chkOcultarPresencaManual")?.checked;
 
       tb.innerHTML = (a.presencas||[]).slice().sort((x,y)=>(x.ts||"").localeCompare(y.ts||"")).map(p=>{
         const u = listU.find(x=>unitKey(x)===p.unidadeKey);
@@ -2624,7 +3470,7 @@ async function supaSaveState(){
         return `<tr>
           <td><b>${escapeHtml(p.unidadeKey)}</b></td>
           <td>${escapeHtml(u?.nome||"")}</td>
-          <td>${fmtDT(p.ts)}</td>
+          <td>${fmtDT(p.ts)}${(!hideManual && p.tipo==="MANUAL") ? `<div class="smallnote"><span class="badge text-bg-warning">MANUAL</span> ${escapeHtml(p.por||"")}</div>` : ``}</td>
           <td class="smallnote">${escapeHtml(repsTxt)}</td>
         </tr>`;
       }).join("") || `<tr><td colspan="4" class="smallnote">Sem acessos registrados.</td></tr>`;
@@ -2654,6 +3500,8 @@ async function supaSaveState(){
       tb.innerHTML = lista.slice().sort((x,y)=>(y.ts||"").localeCompare(x.ts||"")).map(v=>{
         const repsTxt = (v.representadas||[]).length ? (v.representadas||[]).join(", ") : "-";
         const st = v.anulado ? `ANULADO` : `OK`;
+        const isManual = (v.tipo==="MANUAL");
+        const manualTxt = isManual ? (`MANUAL` + (v.lancadoPor?` (${v.lancadoPor})`:``)) : ``;
         return `<tr>
           <td class="smallnote">${escapeHtml(qMap[v.questaoId]||v.questaoId)}</td>
           <td><b>${escapeHtml(v.unidadeKey)}</b></td>
@@ -2661,7 +3509,7 @@ async function supaSaveState(){
           <td>${Number(v.pesoUnidade||1)}</td>
           <td>${Number(v.pesoFracao||0).toFixed(6)}</td>
           <td>${fmtDT(v.ts)}</td>
-          <td><span class="badge ${v.anulado?'text-bg-danger':'text-bg-success'}">${st}</span></td>
+          <td><span class="badge ${v.anulado?'text-bg-danger':'text-bg-success'}">${st}</span>${isManual?` <span class="badge text-bg-primary">${escapeHtml(manualTxt)}</span>`:''}</td>
           <td class="smallnote">${escapeHtml(repsTxt)}</td>
         </tr>`;
       }).join("") || `<tr><td colspan="8" class="smallnote">Sem votos.</td></tr>`;
@@ -2674,11 +3522,13 @@ async function supaSaveState(){
       ensureAssembleiaRuntime(a);
 
       const listU = getUnidadesCliente(cliId);
+      const hideManual = !!document.getElementById("chkOcultarPresencaManual")?.checked;
       const rows = [["unidade","nome","datahora","representa"]];
       (a.presencas||[]).forEach(p=>{
         const u = listU.find(x=>unitKey(x)===p.unidadeKey);
         const reps = (a.agregacoes[p.unidadeKey]||[]);
-        rows.push([p.unidadeKey, u?.nome||"", fmtDT(p.ts), reps.join(" | ")]);
+        const dt = fmtDT(p.ts) + ((!hideManual && p.tipo==="MANUAL") ? " [MANUAL]" : "");
+        rows.push([p.unidadeKey, u?.nome||"", dt, reps.join(" | ")]);
       });
       downloadCSV("presenca.csv", rows);
     }
@@ -2762,6 +3612,7 @@ async function supaSaveState(){
     document.addEventListener("DOMContentLoaded", ()=>{
       // estado já carregado
       restoreSession();
+    checkResetHash();
       renderSelectClienteAssembleia();
       updateBadges();
       switchTab("tabClientes");
