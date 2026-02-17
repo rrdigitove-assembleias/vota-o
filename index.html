@@ -15,32 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   
-  const REMOTE_ENABLED = true;
-
-async function remoteGetState() {
-  const r = await fetch("/.netlify/functions/state_get", { cache: "no-store" });
-  const j = await r.json();
-  if (!j?.ok) throw new Error(j?.error || "Falha ao carregar estado online");
-  return j.state || {};
-}
-
-async function remoteSetState(stateObj) {
-  const r = await fetch("/.netlify/functions/state_set", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state: stateObj })
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j?.ok) throw new Error(j?.error || "Falha ao salvar estado online");
-  return true;
-}
-
-function setDBStatus(msg){
-  const el = document.getElementById('dbStatus');
-  if(el) el.textContent = msg || '';
-}
-
-
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
     :root{
       --rr-dark:#1f2937;
@@ -1104,31 +1079,94 @@ function setDBStatus(msg){
 // SUPABASE (sync entre abas / dispositivos)
 // Preencha com seus dados do Supabase (Project Settings -> API)
 // =========================
-// =========================
-// SYNC ONLINE (Netlify Functions -> Supabase)
-// =========================
-const REMOTE_ENABLED = true;
-let _remoteSaveTimer = null;
+const SUPABASE_URL = "https://wiezuw...supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....";
 
-async function remoteGetState(){
-  const r = await fetch("/.netlify/functions/state_get", { cache:"no-store" });
-  const j = await r.json();
-  if(!j?.ok) throw new Error(j?.error || "Falha ao carregar estado online");
-  return j.state || {};
+function setDbStatus(msg){
+  const el = document.getElementById("dbStatus");
+  if(el) el.innerText = msg;
 }
 
-async function remoteSetState(stateObj){
-  const r = await fetch("/.netlify/functions/state_set", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ state: stateObj })
-  });
-  const j = await r.json().catch(()=> ({}));
-  if(!r.ok || !j?.ok) throw new Error(j?.error || "Falha ao salvar estado online");
-  return true;
+function supabaseReady(){
+  return !!(window.supabase && SUPABASE_URL && SUPABASE_ANON_KEY);
 }
 
-function saveState(){
+let supa = null;
+if(supabaseReady()) {
+  try {
+    supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch(e) {
+    supa = null;
+  }
+}
+
+async function supaLoadState(){
+  if(!supa) return false;
+  try {
+    setDbStatus("DB: carregando…");
+    const { data, error } = await supa
+      .from(SUPABASE_TABLE)
+      .select("data")
+      .eq("id", SUPABASE_ROW_ID)
+      .maybeSingle();
+
+    if(error) throw error;
+    if(data && data.data) {
+      // substitui o STATE pelo do banco (mantendo o formato)
+      STATE = data.data;
+      setDbStatus("DB: ok");
+      return true;
+    }
+    setDbStatus("DB: vazio");
+    return false;
+  } catch(e) {
+    console.error("Supabase load failed:", e);
+    setDbStatus("DB: erro");
+    return false;
+  }
+}
+
+let _supaSaveTimer = null;
+function scheduleSupaSave(){
+  if(!supa) return;
+  if(_supaSaveTimer) clearTimeout(_supaSaveTimer);
+  _supaSaveTimer = setTimeout(() => {
+    supaSaveState().catch(()=>{});
+  }, 600);
+}
+
+async function supaSaveState(){
+  if(!supa) return false;
+  try {
+    setDbStatus("DB: salvando…");
+    const payload = {
+      id: SUPABASE_ROW_ID,
+      data: STATE,
+      updated_at: new Date().toISOString()
+    };
+    const { error } = await supa
+      .from(SUPABASE_TABLE)
+      .upsert(payload, { onConflict: "id" });
+
+    if(error) throw error;
+    setDbStatus("DB: ok");
+    return true;
+  } catch(e) {
+    console.error("Supabase save failed:", e);
+    setDbStatus("DB: erro");
+    return false;
+  }
+}
+
+
+    // IMPORTANTÍSSIMO: SESSION antes de qualquer render (evita TDZ)
+    var SESSION = { operador:null };
+
+    // fallback memória se storage bloqueado
+    let MEM_LOCAL = null;
+    let MEM_SESSION = null;
+
+    function saveState(){
   const json = JSON.stringify(STATE);
 
   // salva local (continua igual)
@@ -1136,56 +1174,15 @@ function saveState(){
     MEM_LOCAL = json;
   }
 
-  // salva online (sem travar a tela)
-  if(!REMOTE_ENABLED) return;
-
-  if(_remoteSaveTimer) clearTimeout(_remoteSaveTimer);
-  _remoteSaveTimer = setTimeout(async ()=>{
-    try{
-      await remoteSetState(STATE);
-      setDBStatus("SYNC: ok");
-    }catch(e){
-      console.warn("Falha ao salvar online:", e?.message || e);
-      setDBStatus("SYNC: offline");
-    }
-  }, 600);
+  // salva no Supabase (para sincronizar com outras abas / usuários)
+  scheduleSupaSave();
 }
 
-    async function loadState(){
-  // 1) Carrega local primeiro (fallback)
-  const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
-  if(raw){
-    try{ STATE = JSON.parse(raw); }catch(e){}
-  }
-
-  if(!REMOTE_ENABLED){
-    setDBStatus("SYNC: local");
-    return;
-  }
-
-  // 2) Tenta online
-  try{
-    const remote = await remoteGetState();
-    const remoteHasData = remote && typeof remote === "object" && Object.keys(remote).length > 0;
-
-    if(remoteHasData){
-      STATE = remote;
-
-      // espelha local
-      const json2 = JSON.stringify(STATE);
-      if(!storageSet("local", "rr_local_state", json2)) MEM_LOCAL = json2;
-
-      setDBStatus("SYNC: ok");
-    }else{
-      // online vazio: envia o local atual (primeira vez)
-      await remoteSetState(STATE);
-      setDBStatus("SYNC: ok");
-    }
-  }catch(e){
-    console.warn("Falha ao carregar online (usando local):", e?.message || e);
-    setDBStatus("SYNC: offline");
-  }
-}
+    function loadState(){
+      const raw = storageGet("local", "rr_local_state") || MEM_LOCAL;
+      if(raw){
+        try{ STATE = JSON.parse(raw); }catch(e){}
+      }
     }
     function persistSession(){
       const id = SESSION.operador?.id || "";
@@ -1210,7 +1207,7 @@ function saveState(){
     }
 
     // carregue estado imediatamente
-    const STATE_LOAD_PROMISE = loadState();
+    loadState();
 
     // =========================
     // Edit context (para botões Editar)
@@ -3752,8 +3749,6 @@ function gravarVotoManual(){
     // Inicial
     // =========================
     document.addEventListener("DOMContentLoaded", ()=>{
-      Promise.resolve(STATE_LOAD_PROMISE).then(()=>{
-
       // estado já carregado
       restoreSession();
     checkResetHash();
@@ -3763,7 +3758,6 @@ function gravarVotoManual(){
       if(SESSION.operador) onStateUpdated();
       // se entrou via hash morador
       autoOpenMoradorByHash();
-      });
     });
   </script>
 
