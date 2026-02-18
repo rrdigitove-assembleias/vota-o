@@ -1,1 +1,10 @@
+{
+  "name": "rr-digivote",
+  "version": "1.0.0",
+  "description": "RR Digivote Online Sync",
+  "main": "index.html",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  }
+}
 
