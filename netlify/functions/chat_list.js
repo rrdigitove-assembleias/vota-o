@@ -3,17 +3,18 @@ export default async (req, context) => {
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+    // CORS básico (para o browser permitir)
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "content-type, authorization",
-      "Access-Control-Allow-Methods": "POST,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,OPTIONS",
     };
 
     if (req.method === "OPTIONS") {
       return new Response("", { status: 204, headers: corsHeaders });
     }
 
-    if (req.method !== "POST") {
+    if (req.method !== "GET") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -27,62 +28,44 @@ export default async (req, context) => {
       });
     }
 
-    const body = await req.json().catch(() => null);
-    if (!body) {
-      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const url = new URL(req.url);
 
-    const {
-      assembly_id,
-      mode = "public",
-      unit_key = null,
-      sender_role,
-      sender_name,
-      message,
-      reply_to_id = null,
-    } = body;
+    const assembly_id = url.searchParams.get("assembly_id");
+    const mode = url.searchParams.get("mode") || "public"; // public|private
+    const unit_key = url.searchParams.get("unit_key");     // obrigatório se private
+    const limit = Math.min(parseInt(url.searchParams.get("limit") || "100", 10), 300);
+    const after_id = url.searchParams.get("after_id"); // opcional (para buscar só novas)
 
-    if (!assembly_id || !sender_role || !sender_name || !message) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+    if (!assembly_id) {
+      return new Response(JSON.stringify({ error: "assembly_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (mode === "private" && !unit_key) {
-      return new Response(JSON.stringify({ error: "unit_key required for private mode" }), {
+      return new Response(JSON.stringify({ error: "unit_key is required for private mode" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Limites: morador 150, adm 300
-    const maxLen = sender_role === "ADM" ? 300 : 150;
-    const msg = String(message).trim().slice(0, maxLen);
+    // Monta filtros do Supabase REST
+    const params = new URLSearchParams();
+    params.set("select", "id,assembly_id,mode,unit_key,sender_role,sender_name,message,reply_to_id,created_at");
+    params.append("assembly_id", `eq.${assembly_id}`);
+    params.append("mode", `eq.${mode}`);
+    if (mode === "private") params.append("unit_key", `eq.${unit_key}`);
+    if (after_id) params.append("id", `gt.${after_id}`);
+    params.set("order", "id.asc");
+    params.set("limit", String(limit));
 
-    const payload = {
-      assembly_id,
-      mode,
-      unit_key: mode === "private" ? unit_key : null,
-      sender_role,
-      sender_name,
-      message: msg,
-      reply_to_id,
-    };
-
-    const sbUrl = `${SUPABASE_URL}/rest/v1/chat_messages`;
+    const sbUrl = `${SUPABASE_URL}/rest/v1/chat_messages?${params.toString()}`;
 
     const r = await fetch(sbUrl, {
-      method: "POST",
       headers: {
-        "Content-Type": "application/json",
         apikey: SERVICE_KEY,
         Authorization: `Bearer ${SERVICE_KEY}`,
-        Prefer: "return=representation",
       },
-      body: JSON.stringify(payload),
     });
 
     const text = await r.text();
