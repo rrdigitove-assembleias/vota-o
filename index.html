@@ -1,21 +1,24 @@
 
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="pt-br">
 <head>
-  <!-- DEPLOY SUPABASE SYNC: 2026-02-13 01:29 -->
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>RR DIGIVOTE - Assembleia & Votação</title>
-
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
-  
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- DEPLOY SUPABASE SYNC: 2026-02-13 01:29 -->
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>RR DIGIVOTE - Assembleia &amp; Votação</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // Supabase (frontend)
+  const SUPABASE_URL = "https://jozysspphrnowzbetusc.supabase.co";
+  const SUPABASE_ANON_KEY = "COLE_SUA_PUBLISHABLE_KEY_AQUI";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+</script>
 <style>
     :root{
       --rr-dark:#1f2937;
@@ -246,798 +249,878 @@
       box-shadow: 0 10px 24px rgba(245,158,11,.14);
     }
 
+
+    /* =========================
+       Impressão / PDF
+       ========================= */
+    #printHeader{ display:none; padding:12px 0; margin-bottom:10px; border-bottom:2px solid #111827; }
+    #printHeader .ph-title{ font-weight:900; letter-spacing:.2px; }
+    #printHeader .ph-sub{ font-size:12px; color:#111827; opacity:.85; }
+    .no-print{ }
+    @media print{
+      @page{ margin: 12mm; }
+      body{ background:#fff !important; }
+      .sidebar, .topbar, .no-print, #loginOverlay, #btnVoltarAdmin{ display:none !important; }
+      #adminRoot, #moradorRoot{ display:block !important; }
+      #printHeader{ display:block !important; }
+      .cardx, .card{ box-shadow:none !important; border:1px solid #e5e7eb !important; }
+      a[href]:after{ content:""; }
+      .table{ font-size:12px; }
+      canvas{ max-width: 520px !important; max-height: 520px !important; }
+
+      /* impressão focada (somente a seção selecionada) */
+      body.printing .sidebar, body.printing .topbar, body.printing #adminRoot, body.printing #moradorRoot, body.printing #loginOverlay, body.printing #btnVoltarAdmin{ display:none !important; }
+      body.printing #printHeader{ display:block !important; }
+      body.printing #printArea{ display:block !important; }
+    }
+
+
+/* === CHAT (Supabase Realtime) === */
+.chatModalOverlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9999}
+.chatModal{background:#fff;border-radius:12px;max-width:900px;width:95%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.chatHeader{padding:12px 14px;border-bottom:1px solid #e6e6e6;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.chatTitle{font-weight:700}
+.chatBody{padding:12px 14px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:8px;background:#fafafa}
+.chatMsg{background:#fff;border:1px solid #e7e7e7;border-radius:10px;padding:8px 10px}
+.chatMsgMeta{font-size:12px;opacity:.75;display:flex;gap:8px;flex-wrap:wrap}
+.chatMsgText{margin-top:4px;white-space:pre-wrap;word-break:break-word}
+.chatMsgAdm{border:1px solid #f39c12}
+.chatFooter{padding:12px 14px;border-top:1px solid #e6e6e6;display:flex;gap:8px;align-items:flex-start}
+.chatFooter textarea{flex:1;min-height:44px;max-height:120px}
+.chatSmall{font-size:12px;opacity:.8}
+.chatBtnRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 </style>
 </head>
-
 <body>
-  <!-- LOGIN -->
-  <div id="loginOverlay">
-    <div class="cardx p-4" style="max-width:420px; width:100%;">
-      <div class="text-center mb-3">
-        <div class="brand fs-4">RR DIGIVOTE</div>
-        <div class="smallnote">Acesso do operador (MASTER/ADMIN/OPERADOR/DEMO)</div>
-      </div>
-      <div class="mb-2">
-        <label class="form-label small fw-bold">Usuário</label>
-        <input id="loginUser" class="form-control" placeholder="ex.: master" autocomplete="username">
-      </div>
-      <div class="mb-3">
-        <label class="form-label small fw-bold">Senha</label>
-        <input id="loginPass" type="password" class="form-control" placeholder="ex.: master" autocomplete="current-password">
-      </div>
-      <button class="btn btn-rr w-100 fw-bold" onclick="validarLogin()">Entrar</button>
-      <button class="btn btn-link w-100 mt-2" onclick="abrirEsqueciSenhaModal()">Esqueci minha senha</button>
-      <div class="smallnote mt-3">
+<!-- LOGIN -->
+<div id="loginOverlay">
+<div class="cardx p-4" style="max-width:420px; width:100%;">
+<div class="text-center mb-3">
+<div class="brand fs-4">RR DIGIVOTE</div>
+<div class="smallnote">Acesso do operador (MASTER/ADMIN/OPERADOR/DEMO)</div>
+</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">Usuário</label>
+<input autocomplete="username" class="form-control" id="loginUser" placeholder="ex.: master"/>
+</div>
+<div class="mb-3">
+<label class="form-label small fw-bold">Senha</label>
+<input autocomplete="current-password" class="form-control" id="loginPass" placeholder="ex.: master" type="password"/>
+</div>
+<button class="btn btn-rr w-100 fw-bold" onclick="validarLogin()">Entrar</button>
+<button class="btn btn-link w-100 mt-2" onclick="abrirEsqueciSenhaModal()">Esqueci minha senha</button>
+<div class="smallnote mt-3">
         Padrão: usuário <b>master</b> / senha <b>master</b>
+</div>
+</div>
+</div>
+<!-- PRINT HEADER (apenas para impressão/PDF) -->
+<div id="printHeader">
+<div class="ph-title">RR DIGIVOTE</div>
+<div class="ph-sub" id="printHeaderLine1"></div>
+<div class="ph-sub" id="printHeaderLine2"></div>
+</div>
+<div class="d-none" id="printArea"></div>
+<!-- ADMIN APP -->
+<div id="adminRoot">
+<div class="topbar">
+<div class="d-flex align-items-center gap-3 flex-wrap">
+<div class="brand">RR DIGIVOTE</div>
+<button class="btn btn-sm btn-outline-dark" onclick="mostrarQRModal()">
+<i class="bi bi-qr-code"></i> QR da Assembleia
+        </button>
+<button class="btn btn-sm btn-dark" onclick="toggleMoradorPreview()">
+<i class="bi bi-phone"></i> Alternar Visão (ADM/MORADOR)
+        </button>
+<button class="btn btn-sm btn-outline-secondary" onclick="abrirMinhaSenhaModal()">
+<i class="bi bi-key"></i> Minha senha
+        </button>
+<button class="btn btn-sm btn-danger" onclick="logoutAdmin()">
+<i class="bi bi-box-arrow-right"></i> Sair
+        </button>
+</div>
+<div class="d-flex align-items-center gap-2 flex-wrap">
+<span class="badge text-bg-secondary badge-pill" id="badgeRole">ROLE</span>
+<span class="badge text-bg-dark badge-pill" id="badgeCliente">Cliente: Nenhum</span>
+<span class="badge text-bg-dark badge-pill" id="badgeAssembleia">Assembleia: Nenhuma</span>
+</div>
+</div>
+<aside class="sidebar">
+<div class="px-3 pt-3 pb-2 border-bottom border-light border-opacity-25">
+<div class="fw-bold">MENU (ADMIN)</div>
+<div class="smallnote text-white-50">RR Digivote</div>
+</div>
+<div class="navbtn active" data-tab="tabClientes" onclick="switchTab('tabClientes')">
+<i class="bi bi-building"></i> Clientes
       </div>
+<div class="navbtn" data-tab="tabOperadores" onclick="switchTab('tabOperadores')">
+<i class="bi bi-person-badge"></i> Operadores
+      </div>
+<div class="navbtn" data-tab="tabAssembleia" onclick="switchTab('tabAssembleia')">
+<i class="bi bi-calendar-check"></i> Assembleia
+      </div>
+<div class="navbtn" data-tab="tabUnidades" onclick="switchTab('tabUnidades')">
+<i class="bi bi-people"></i> Unidades (Base)
+      </div>
+<div class="navbtn" data-tab="tabCheckin" onclick="switchTab('tabCheckin')">
+<i class="bi bi-patch-check"></i> Check-in
+      </div>
+<div class="navbtn" data-tab="tabOrdem" onclick="switchTab('tabOrdem')">
+<i class="bi bi-list-task"></i> Ordem do Dia
+      </div>
+<div class="navbtn" data-tab="tabResultados" onclick="switchTab('tabResultados')">
+<i class="bi bi-pie-chart"></i> Resultados
+      </div>
+<div class="navbtn" data-tab="tabRelatorios" onclick="switchTab('tabRelatorios')">
+<i class="bi bi-file-earmark-text"></i> Relatórios
+      </div>
+</aside>
+<main class="content">
+<!-- CONTEXTO (cliente/assembleia) -->
+<div class="cardx p-3 mb-3">
+<div class="row g-2 align-items-end">
+<div class="col-lg-3">
+<label class="form-label small fw-bold mb-1">Cliente ativo</label>
+<select class="form-select" id="selClienteAtivo" onchange="setClienteAtivo(this.value)"></select>
+</div>
+<div class="col-lg-5">
+<label class="form-label small fw-bold mb-1">Assembleia do cliente</label>
+<select class="form-select" id="selAssembleiaAtiva" onchange="setAssembleiaAtiva(this.value)"></select>
+</div>
+<div class="col-lg-2">
+<label class="form-label small fw-bold mb-1">Apuração</label>
+<select class="form-select" id="selApuracao" onchange="setApuracao(this.value)">
+<option value="UNIDADE">UNIDADE</option>
+<option value="FRACAO">FRAÇÃO</option>
+</select>
+</div>
+<div class="col-lg-2 d-grid">
+<button class="btn btn-ok fw-bold" onclick="toggleAssembleiaAtiva()">
+<i class="bi bi-play-circle"></i> Abrir/Encerrar
+            </button>
+</div>
+</div>
+<div class="smallnote mt-2" id="ctxHint"></div>
+</div>
+<!-- CLIENTES -->
+<section class="tabPane" id="tabClientes">
+<div class="cardx p-3">
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+<div>
+<div class="fw-bold fs-5">Cadastro de Clientes</div>
+<div class="smallnote">Cadastre e depois selecione no topo.</div>
+</div>
+</div>
+<div class="row g-2 mt-2">
+<div class="col-md-4">
+<label class="form-label small fw-bold">Condomínio / Cliente</label>
+<input class="form-control" id="cliNome" placeholder="Nome do condomínio"/>
+</div>
+<div class="col-md-3">
+<label class="form-label small fw-bold">CNPJ</label>
+<input class="form-control" id="cliCnpj" placeholder="00.000.000/0000-00"/>
+</div>
+<div class="col-md-5">
+<label class="form-label small fw-bold">Endereço</label>
+<input class="form-control" id="cliEnd" placeholder="Rua, número, bairro, cidade"/>
+</div>
+</div>
+<div class="mt-3 d-flex gap-2 flex-wrap">
+<button class="btn btn-rr fw-bold" onclick="salvarCliente()">Salvar cliente</button>
+<button class="btn btn-outline-secondary" onclick="limparClienteForm()">Novo</button>
+<span class="smallnote" id="cliEditHint"></span>
+</div>
+<div class="table-responsive mt-3">
+<table class="table table-sm align-middle">
+<thead class="table-dark">
+<tr>
+<th>Nome</th><th>CNPJ</th><th>Assembleias</th><th>Ações</th>
+</tr>
+</thead>
+<tbody id="tbClientes"></tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- OPERADORES -->
+<section class="tabPane d-none" id="tabOperadores">
+<div class="cardx p-3">
+<div class="fw-bold fs-5">Operadores / Acessos</div>
+<div class="smallnote">Perfis: MASTER, ADMIN, OPERADOR, DEMO.</div>
+<div class="row g-2 mt-2">
+<div class="col-md-3">
+<label class="form-label small fw-bold">Nome</label>
+<input autocomplete="name" class="form-control" id="opNome"/>
+</div>
+<div class="col-md-2">
+<label class="form-label small fw-bold">CPF</label>
+<input class="form-control" id="opCpf" placeholder="Somente números"/>
+</div>
+<div class="col-md-3">
+<label class="form-label small fw-bold">E-mail</label>
+<input class="form-control" id="opEmail" placeholder="email@dominio.com"/>
+</div>
+<div class="col-md-2">
+<label class="form-label small fw-bold">Usuário</label>
+<input autocomplete="username" class="form-control" id="opUser" placeholder="login"/>
+</div>
+<div class="col-md-2">
+<label class="form-label small fw-bold">Senha</label>
+<input autocomplete="new-password" class="form-control" id="opPass" placeholder="senha" type="password"/>
+<div class="smallnote">Em edição, deixe vazio para não alterar.</div>
+</div>
+<div class="col-md-2">
+<label class="form-label small fw-bold">Perfil</label>
+<select class="form-select" id="opRole">
+<option value="OPERADOR">OPERADOR</option>
+<option value="DEMO">DEMO</option>
+<option value="ADMIN">ADMIN</option>
+<option value="MASTER">MASTER</option>
+<option value="GERENTE">GERENTE</option>
+</select>
+</div>
+<div class="col-md-3 d-flex align-items-end gap-2">
+<button class="btn btn-rr fw-bold w-100" onclick="salvarOperador()">Salvar</button>
+<button class="btn btn-outline-secondary" onclick="limparOperadorForm()">Novo</button>
+</div>
+</div>
+<div class="smallnote mt-2" id="opEditHint"></div>
+<div class="table-responsive mt-3">
+<table class="table table-sm align-middle">
+<thead class="table-dark">
+<tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Ações</th></tr>
+</thead>
+<tbody id="tbOperadores"></tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- ASSEMBLEIA -->
+<section class="tabPane d-none" id="tabAssembleia">
+<div class="cardx p-3">
+<div class="fw-bold fs-5">Cadastro de Assembleia</div>
+<div class="smallnote">Crie assembleias por cliente. QR/Link muda a cada assembleia.</div>
+<div class="row g-2 mt-2">
+<div class="col-md-4">
+<label class="form-label small fw-bold">Título</label>
+<input class="form-control" id="assTitulo" placeholder="Ex: Condomínio X - 06/02/2026 19:00"/>
+</div>
+<div class="col-md-3">
+<label class="form-label small fw-bold">Tipo</label>
+<select class="form-select" id="assTipo" onchange="toggleTipoOutros()">
+<option>Ordinária</option>
+<option>Extraordinária</option>
+<option>Afetação</option>
+<option>Instalação</option>
+<option>Investidor</option>
+<option>Reunião</option>
+<option>Outros</option>
+</select>
+</div>
+<div class="col-md-3">
+<label class="form-label small fw-bold">Modalidade</label>
+<select class="form-select" id="assModalidade">
+<option>Presencial</option>
+<option>Online</option>
+<option>Híbrida</option>
+</select>
+</div>
+<div class="col-md-2">
+<label class="form-label small fw-bold">Apuração padrão</label>
+<select class="form-select" id="assApuracao">
+<option value="UNIDADE">UNIDADE</option>
+<option value="FRACAO">FRAÇÃO</option>
+</select>
+</div>
+<div class="col-md-4 d-none" id="wrapTipoOutros">
+<label class="form-label small fw-bold">Especificar "Outros"</label>
+<input class="form-control" id="assTipoOutros" placeholder="Digite o tipo"/>
+</div>
+<div class="col-md-4">
+<label class="form-label small fw-bold">Início</label>
+<input class="form-control" id="assInicio" type="datetime-local"/>
+</div>
+<div class="col-md-4">
+<label class="form-label small fw-bold">Término</label>
+<input class="form-control" id="assFim" type="datetime-local"/>
+
+</div>
+<div class="col-12 d-none" id="wrapSalaVirtual">
+  <label class="form-label small fw-bold">Sala virtual (link)</label>
+  <input class="form-control" id="assSalaLink" placeholder="https://meet.google.com/... ou https://zoom.us/j/... ou https://jitsi...." />
+  <div class="smallnote mt-1">Disponível para modalidade <b>Online</b> ou <b>Híbrida</b>. O botão AO VIVO aparece para o morador somente no período entre início e término.</div>
+</div>
+
+<div class="col-12">
+  <label class="form-label small fw-bold">Observações / Link de documentos (Drive etc.)</label>
+  <textarea class="form-control" id="assObs" rows="2" placeholder="Ex: Link da pasta no Drive, orientações, avisos..."></textarea>
+  <div class="smallnote mt-1">Esse texto aparece para o morador no topo, logo abaixo das datas.</div>
+</div>
+
+<div class="col-md-2">
+<label class="form-label small fw-bold">Presidente*</label>
+<input class="form-control" id="assPres" placeholder="Obrigatório"/>
+</div>
+<div class="col-md-2">
+<label class="form-label small fw-bold">Secretário*</label>
+<input class="form-control" id="assSec" placeholder="Obrigatório"/>
+</div>
+</div>
+<div class="mt-3 d-flex gap-2 flex-wrap">
+<button class="btn btn-rr fw-bold" onclick="salvarAssembleia()">Salvar assembleia</button>
+<button class="btn btn-outline-secondary" onclick="limparAssembleiaForm()">Nova</button>
+<span class="smallnote" id="assEditHint"></span>
+</div>
+<hr class="my-3"/>
+<div class="fw-bold">Assembleias do cliente</div>
+<div class="table-responsive mt-2">
+<table class="table table-sm align-middle">
+<thead class="table-dark">
+<tr><th>Título</th><th>Tipo</th><th>Modalidade</th><th>Status</th><th>Ações</th></tr>
+</thead>
+<tbody id="tbAssembleias"></tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- UNIDADES -->
+<section class="tabPane d-none" id="tabUnidades">
+<div class="cardx p-3">
+<div class="d-flex justify-content-between flex-wrap gap-2">
+<div>
+<div class="fw-bold fs-5">Unidades (Base)</div>
+<div class="smallnote">Importe Excel/CSV com colunas: Bloco, Unidade, Nome, CPF, e-mail, fracao</div>
+</div>
+<div class="d-flex gap-2">
+<button class="btn btn-outline-danger btn-sm" onclick="limparUnidadesCliente()">Limpar unidades do cliente</button>
+</div>
+</div>
+<div class="row g-2 mt-2 align-items-end">
+<div class="col-md-6">
+<label class="form-label small fw-bold">Importar planilha</label>
+<input accept=".xlsx,.xls,.csv" class="form-control" id="fileUnidades" type="file"/>
+</div>
+<div class="col-md-3 d-grid">
+<button class="btn btn-ok fw-bold" onclick="importarUnidades()">Importar</button>
+</div>
+<div class="col-md-3 d-grid">
+<button class="btn btn-outline-secondary fw-bold" onclick="baixarModeloUnidades()">Baixar modelo</button>
+</div>
+</div>
+<hr class="my-3"/>
+<div class="fw-bold">Cadastro manual / Edição</div>
+<div class="row g-2 mt-1">
+<div class="col-md-2"><input class="form-control" id="uBloco" placeholder="Bloco"/></div>
+<div class="col-md-2"><input class="form-control" id="uUnidade" placeholder="Unidade"/></div>
+<div class="col-md-3"><input class="form-control" id="uNome" placeholder="Nome"/></div>
+<div class="col-md-2"><input class="form-control" id="uCpf" placeholder="CPF"/></div>
+<div class="col-md-2"><input class="form-control" id="uEmail" placeholder="e-mail"/></div>
+<div class="col-md-1"><input class="form-control" id="uFracao" placeholder="Fração"/></div>
+</div>
+<div class="mt-2 d-flex gap-2 align-items-center">
+<button class="btn btn-rr fw-bold" onclick="salvarUnidadeManual()">Salvar</button>
+<button class="btn btn-outline-secondary" onclick="limparUnidadeForm()">Novo</button>
+<span class="smallnote" id="uEditHint"></span>
+</div>
+<div class="smallnote mt-2" id="sumFracoes"></div>
+<div class="table-responsive mt-2">
+<table class="table table-sm align-middle">
+<thead class="table-dark">
+<tr>
+<th>Unidade</th><th>Nome</th><th>CPF</th><th>E-mail</th><th>Fração</th><th>Ações</th>
+</tr>
+</thead>
+<tbody id="tbUnidades"></tbody>
+</table>
+</div>
+</div>
+</section>
+<!-- CHECK-IN -->
+<section class="tabPane d-none" id="tabCheckin">
+<div class="cardx p-3">
+<div class="d-flex justify-content-between flex-wrap gap-2">
+<div>
+<div class="fw-bold fs-5">Check-in / Validação</div>
+<div class="smallnote">Valide para permitir acesso do morador. Bloqueio por débito impede voto (inclusive agregadas).</div>
+</div>
+<div class="d-flex gap-2 flex-wrap">
+<button class="btn btn-ok btn-sm fw-bold" onclick="checkinValidarTodos()">Validar todos</button>
+<button class="btn btn-outline-secondary btn-sm fw-bold" onclick="checkinDesvalidarTodos()">Desvalidar todos</button>
+</div>
+</div>
+<hr class="my-2"/>
+<div class="row g-2">
+<div class="col-lg-5">
+<label class="form-label small fw-bold">Agregar unidades (procuração)</label>
+<div class="d-flex gap-2">
+<select class="form-select" id="selAgPrincipal"></select>
+<button class="btn btn-rr" onclick="abrirModalAgregacao()"><i class="bi bi-link-45deg"></i> Agregar</button>
+</div>
+<div class="smallnote mt-1">Agregação é por assembleia. Votos já feitos não mudam se você alterar depois.</div>
+</div>
+<div class="col-lg-7">
+<label class="form-label small fw-bold">Buscar</label>
+<input class="form-control" id="buscaCheckin" oninput="renderCheckin()" placeholder="Digite bloco/unidade/nome/cpf/email"/>
+</div>
+</div>
+<div id="secInscritos"><div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3"><div class="fw-bold">Lista de inscritos / validação</div><div class="no-print d-flex gap-2"><button class="btn btn-outline-dark btn-sm" onclick="imprimirSecao('secInscritos','Lista de inscritos / validação')"><i class="bi bi-filetype-pdf"></i> Salvar PDF</button><button class="btn btn-outline-secondary btn-sm" onclick="imprimirSecao('secInscritos','Lista de inscritos / validação')"><i class="bi bi-printer"></i> Imprimir</button></div></div><div class="table-responsive mt-3">
+<table class="table table-sm align-middle">
+<thead class="table-dark">
+<tr>
+<th>Unidade</th><th>Nome</th><th>Status</th><th>Débito</th><th>Agregadas</th><th>Ação</th>
+</tr>
+</thead>
+<tbody id="tbCheckin"></tbody>
+</table>
+</div></div>
+</div>
+</section>
+<!-- ORDEM DO DIA -->
+<section class="tabPane d-none" id="tabOrdem">
+<div class="cardx p-3">
+<div class="fw-bold fs-5">Ordem do Dia / Questões</div>
+<div class="mt-3 p-3 border rounded" id="chatConfigBox">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div class="fw-bold">Chat (ADM ↔ Moradores)</div>
+    <div class="form-check form-switch">
+      <input class="form-check-input" type="checkbox" id="chatEnabledSwitch" onchange="onChatConfigChange()">
+      <label class="form-check-label" for="chatEnabledSwitch">Ativar chat</label>
     </div>
   </div>
+  <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+    <label class="smallnote mb-0">Modo:</label>
+    <select class="form-select form-select-sm" id="chatModeSel" style="max-width:180px" onchange="onChatConfigChange()">
+      <option value="private">Privado (ADM ↔ Unidade)</option>
+      <option value="public">Público (todos veem)</option>
+    </select>
+    <button class="btn btn-sm btn-outline-primary" onclick="abrirChatAdm()">Abrir chat</button>
+    <span class="smallnote">* Morador: 150 caracteres • ADM: 300 • Resposta do ADM com contorno laranja.</span>
+  </div>
+  <div class="mt-2 smallnote">
+    Para tempo real, configure Supabase Realtime e preencha SUPABASE_URL / ANON_KEY no código.
+  </div>
+</div>
 
-  <!-- ADMIN APP -->
-  <div id="adminRoot">
-    <div class="topbar">
-      <div class="d-flex align-items-center gap-3 flex-wrap">
-        <div class="brand">RR DIGIVOTE</div>
-        <button class="btn btn-sm btn-outline-dark" onclick="mostrarQRModal()">
-          <i class="bi bi-qr-code"></i> QR da Assembleia
-        </button>
-        <button class="btn btn-sm btn-dark" onclick="toggleMoradorPreview()">
-          <i class="bi bi-phone"></i> Alternar Visão (ADM/MORADOR)
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" onclick="abrirMinhaSenhaModal()">
-          <i class="bi bi-key"></i> Minha senha
-        </button>
-        <button class="btn btn-sm btn-danger" onclick="logoutAdmin()">
-          <i class="bi bi-box-arrow-right"></i> Sair
-        </button>
-      </div>
-
-      <div class="d-flex align-items-center gap-2 flex-wrap">
-        <span class="badge text-bg-secondary badge-pill" id="badgeRole">ROLE</span>
-        <span class="badge text-bg-dark badge-pill" id="badgeCliente">Cliente: Nenhum</span>
-        <span class="badge text-bg-dark badge-pill" id="badgeAssembleia">Assembleia: Nenhuma</span>
-      </div>
-    </div>
-
-    <aside class="sidebar">
-      <div class="px-3 pt-3 pb-2 border-bottom border-light border-opacity-25">
-        <div class="fw-bold">MENU (ADMIN)</div>
-        <div class="smallnote text-white-50">RR Digivote</div>
-      </div>
-
-      <div class="navbtn active" data-tab="tabClientes" onclick="switchTab('tabClientes')">
-        <i class="bi bi-building"></i> Clientes
-      </div>
-      <div class="navbtn" data-tab="tabOperadores" onclick="switchTab('tabOperadores')">
-        <i class="bi bi-person-badge"></i> Operadores
-      </div>
-      <div class="navbtn" data-tab="tabAssembleia" onclick="switchTab('tabAssembleia')">
-        <i class="bi bi-calendar-check"></i> Assembleia
-      </div>
-      <div class="navbtn" data-tab="tabUnidades" onclick="switchTab('tabUnidades')">
-        <i class="bi bi-people"></i> Unidades (Base)
-      </div>
-      <div class="navbtn" data-tab="tabCheckin" onclick="switchTab('tabCheckin')">
-        <i class="bi bi-patch-check"></i> Check-in
-      </div>
-      <div class="navbtn" data-tab="tabOrdem" onclick="switchTab('tabOrdem')">
-        <i class="bi bi-list-task"></i> Ordem do Dia
-      </div>
-      <div class="navbtn" data-tab="tabResultados" onclick="switchTab('tabResultados')">
-        <i class="bi bi-pie-chart"></i> Resultados
-      </div>
-      <div class="navbtn" data-tab="tabRelatorios" onclick="switchTab('tabRelatorios')">
-        <i class="bi bi-file-earmark-text"></i> Relatórios
-      </div>
-    </aside>
-
-    <main class="content">
-      <!-- CONTEXTO (cliente/assembleia) -->
-      <div class="cardx p-3 mb-3">
-        <div class="row g-2 align-items-end">
-          <div class="col-lg-3">
-            <label class="form-label small fw-bold mb-1">Cliente ativo</label>
-            <select id="selClienteAtivo" class="form-select" onchange="setClienteAtivo(this.value)"></select>
-          </div>
-          <div class="col-lg-5">
-            <label class="form-label small fw-bold mb-1">Assembleia do cliente</label>
-            <select id="selAssembleiaAtiva" class="form-select" onchange="setAssembleiaAtiva(this.value)"></select>
-          </div>
-          <div class="col-lg-2">
-            <label class="form-label small fw-bold mb-1">Apuração</label>
-            <select id="selApuracao" class="form-select" onchange="setApuracao(this.value)">
-              <option value="UNIDADE">UNIDADE</option>
-              <option value="FRACAO">FRAÇÃO</option>
-            </select>
-          </div>
-          <div class="col-lg-2 d-grid">
-            <button class="btn btn-ok fw-bold" onclick="toggleAssembleiaAtiva()">
-              <i class="bi bi-play-circle"></i> Abrir/Encerrar
-            </button>
-          </div>
-        </div>
-        <div class="smallnote mt-2" id="ctxHint"></div>
-      </div>
-
-      <!-- CLIENTES -->
-      <section id="tabClientes" class="tabPane">
-        <div class="cardx p-3">
-          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <div>
-              <div class="fw-bold fs-5">Cadastro de Clientes</div>
-              <div class="smallnote">Cadastre e depois selecione no topo.</div>
-            </div>
-          </div>
-
-          <div class="row g-2 mt-2">
-            <div class="col-md-4">
-              <label class="form-label small fw-bold">Condomínio / Cliente</label>
-              <input id="cliNome" class="form-control" placeholder="Nome do condomínio">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small fw-bold">CNPJ</label>
-              <input id="cliCnpj" class="form-control" placeholder="00.000.000/0000-00">
-            </div>
-            <div class="col-md-5">
-              <label class="form-label small fw-bold">Endereço</label>
-              <input id="cliEnd" class="form-control" placeholder="Rua, número, bairro, cidade">
-            </div>
-          </div>
-
-          <div class="mt-3 d-flex gap-2 flex-wrap">
-            <button class="btn btn-rr fw-bold" onclick="salvarCliente()">Salvar cliente</button>
-            <button class="btn btn-outline-secondary" onclick="limparClienteForm()">Novo</button>
-            <span class="smallnote" id="cliEditHint"></span>
-          </div>
-
-          <div class="table-responsive mt-3">
-            <table class="table table-sm align-middle">
-              <thead class="table-dark">
-                <tr>
-                  <th>Nome</th><th>CNPJ</th><th>Assembleias</th><th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="tbClientes"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- OPERADORES -->
-      <section id="tabOperadores" class="tabPane d-none">
-        <div class="cardx p-3">
-          <div class="fw-bold fs-5">Operadores / Acessos</div>
-          <div class="smallnote">Perfis: MASTER, ADMIN, OPERADOR, DEMO.</div>
-
-          <div class="row g-2 mt-2">
-            <div class="col-md-3">
-              <label class="form-label small fw-bold">Nome</label>
-              <input id="opNome" class="form-control" autocomplete="name">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-bold">CPF</label>
-              <input id="opCpf" class="form-control" placeholder="Somente números">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small fw-bold">E-mail</label>
-              <input id="opEmail" class="form-control" placeholder="email@dominio.com">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-bold">Usuário</label>
-              <input id="opUser" class="form-control" placeholder="login" autocomplete="username">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-bold">Senha</label>
-              <input id="opPass" type="password" class="form-control" placeholder="senha" autocomplete="new-password">
-              <div class="smallnote">Em edição, deixe vazio para não alterar.</div>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-bold">Perfil</label>
-              <select id="opRole" class="form-select">
-                <option value="OPERADOR">OPERADOR</option>
-                <option value="DEMO">DEMO</option>
-                <option value="ADMIN">ADMIN</option>
-                <option value="MASTER">MASTER</option>
-              </select>
-            </div>
-            <div class="col-md-3 d-flex align-items-end gap-2">
-              <button class="btn btn-rr fw-bold w-100" onclick="salvarOperador()">Salvar</button>
-              <button class="btn btn-outline-secondary" onclick="limparOperadorForm()">Novo</button>
-            </div>
-          </div>
-          <div class="smallnote mt-2" id="opEditHint"></div>
-
-          <div class="table-responsive mt-3">
-            <table class="table table-sm align-middle">
-              <thead class="table-dark">
-                <tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Ações</th></tr>
-              </thead>
-              <tbody id="tbOperadores"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ASSEMBLEIA -->
-      <section id="tabAssembleia" class="tabPane d-none">
-        <div class="cardx p-3">
-          <div class="fw-bold fs-5">Cadastro de Assembleia</div>
-          <div class="smallnote">Crie assembleias por cliente. QR/Link muda a cada assembleia.</div>
-
-          <div class="row g-2 mt-2">
-            <div class="col-md-4">
-              <label class="form-label small fw-bold">Título</label>
-              <input id="assTitulo" class="form-control" placeholder="Ex: Condomínio X - 06/02/2026 19:00">
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small fw-bold">Tipo</label>
-              <select id="assTipo" class="form-select" onchange="toggleTipoOutros()">
-                <option>Ordinária</option>
-                <option>Extraordinária</option>
-                <option>Afetação</option>
-                <option>Instalação</option>
-                <option>Investidor</option>
-                <option>Reunião</option>
-                <option>Outros</option>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label class="form-label small fw-bold">Modalidade</label>
-              <select id="assModalidade" class="form-select">
-                <option>Presencial</option>
-                <option>Online</option>
-                <option>Híbrida</option>
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-bold">Apuração padrão</label>
-              <select id="assApuracao" class="form-select">
-                <option value="UNIDADE">UNIDADE</option>
-                <option value="FRACAO">FRAÇÃO</option>
-              </select>
-            </div>
-
-            <div class="col-md-4 d-none" id="wrapTipoOutros">
-              <label class="form-label small fw-bold">Especificar "Outros"</label>
-              <input id="assTipoOutros" class="form-control" placeholder="Digite o tipo">
-            </div>
-
-            <div class="col-md-4">
-              <label class="form-label small fw-bold">Início</label>
-              <input id="assInicio" type="datetime-local" class="form-control">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label small fw-bold">Término</label>
-              <input id="assFim" type="datetime-local" class="form-control">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-bold">Presidente*</label>
-              <input id="assPres" class="form-control" placeholder="Obrigatório">
-            </div>
-            <div class="col-md-2">
-              <label class="form-label small fw-bold">Secretário*</label>
-              <input id="assSec" class="form-control" placeholder="Obrigatório">
-            </div>
-          </div>
-
-          <div class="mt-3 d-flex gap-2 flex-wrap">
-            <button class="btn btn-rr fw-bold" onclick="salvarAssembleia()">Salvar assembleia</button>
-            <button class="btn btn-outline-secondary" onclick="limparAssembleiaForm()">Nova</button>
-            <span class="smallnote" id="assEditHint"></span>
-          </div>
-
-          <hr class="my-3">
-
-          <div class="fw-bold">Assembleias do cliente</div>
-          <div class="table-responsive mt-2">
-            <table class="table table-sm align-middle">
-              <thead class="table-dark">
-                <tr><th>Título</th><th>Tipo</th><th>Modalidade</th><th>Status</th><th>Ações</th></tr>
-              </thead>
-              <tbody id="tbAssembleias"></tbody>
-            </table>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- UNIDADES -->
-      <section id="tabUnidades" class="tabPane d-none">
-        <div class="cardx p-3">
-          <div class="d-flex justify-content-between flex-wrap gap-2">
-            <div>
-              <div class="fw-bold fs-5">Unidades (Base)</div>
-              <div class="smallnote">Importe Excel/CSV com colunas: Bloco, Unidade, Nome, CPF, e-mail, fracao</div>
-            </div>
-            <div class="d-flex gap-2">
-              <button class="btn btn-outline-danger btn-sm" onclick="limparUnidadesCliente()">Limpar unidades do cliente</button>
-            </div>
-          </div>
-
-          <div class="row g-2 mt-2 align-items-end">
-            <div class="col-md-6">
-              <label class="form-label small fw-bold">Importar planilha</label>
-              <input id="fileUnidades" type="file" class="form-control" accept=".xlsx,.xls,.csv">
-            </div>
-            <div class="col-md-3 d-grid">
-              <button class="btn btn-ok fw-bold" onclick="importarUnidades()">Importar</button>
-            </div>
-            <div class="col-md-3 d-grid">
-              <button class="btn btn-outline-secondary fw-bold" onclick="baixarModeloUnidades()">Baixar modelo</button>
-            </div>
-          </div>
-
-          <hr class="my-3">
-
-          <div class="fw-bold">Cadastro manual / Edição</div>
-          <div class="row g-2 mt-1">
-            <div class="col-md-2"><input id="uBloco" class="form-control" placeholder="Bloco"></div>
-            <div class="col-md-2"><input id="uUnidade" class="form-control" placeholder="Unidade"></div>
-            <div class="col-md-3"><input id="uNome" class="form-control" placeholder="Nome"></div>
-            <div class="col-md-2"><input id="uCpf" class="form-control" placeholder="CPF"></div>
-            <div class="col-md-2"><input id="uEmail" class="form-control" placeholder="e-mail"></div>
-            <div class="col-md-1"><input id="uFracao" class="form-control" placeholder="Fração"></div>
-          </div>
-          <div class="mt-2 d-flex gap-2 align-items-center">
-            <button class="btn btn-rr fw-bold" onclick="salvarUnidadeManual()">Salvar</button>
-            <button class="btn btn-outline-secondary" onclick="limparUnidadeForm()">Novo</button>
-            <span class="smallnote" id="uEditHint"></span>
-          </div>
-
-          <div class="smallnote mt-2" id="sumFracoes"></div>
-
-          <div class="table-responsive mt-2">
-            <table class="table table-sm align-middle">
-              <thead class="table-dark">
-                <tr>
-                  <th>Unidade</th><th>Nome</th><th>CPF</th><th>E-mail</th><th>Fração</th><th>Ações</th>
-                </tr>
-              </thead>
-              <tbody id="tbUnidades"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- CHECK-IN -->
-      <section id="tabCheckin" class="tabPane d-none">
-        <div class="cardx p-3">
-          <div class="d-flex justify-content-between flex-wrap gap-2">
-            <div>
-              <div class="fw-bold fs-5">Check-in / Validação</div>
-              <div class="smallnote">Valide para permitir acesso do morador. Bloqueio por débito impede voto (inclusive agregadas).</div>
-            </div>
-            <div class="d-flex gap-2 flex-wrap">
-              <button class="btn btn-ok btn-sm fw-bold" onclick="checkinValidarTodos()">Validar todos</button>
-              <button class="btn btn-outline-secondary btn-sm fw-bold" onclick="checkinDesvalidarTodos()">Desvalidar todos</button>
-            </div>
-          </div>
-
-          <hr class="my-2">
-
-          <div class="row g-2">
-            <div class="col-lg-5">
-              <label class="form-label small fw-bold">Agregar unidades (procuração)</label>
-              <div class="d-flex gap-2">
-                <select id="selAgPrincipal" class="form-select"></select>
-                <button class="btn btn-rr" onclick="abrirModalAgregacao()"><i class="bi bi-link-45deg"></i> Agregar</button>
-              </div>
-              <div class="smallnote mt-1">Agregação é por assembleia. Votos já feitos não mudam se você alterar depois.</div>
-            </div>
-            <div class="col-lg-7">
-              <label class="form-label small fw-bold">Buscar</label>
-              <input id="buscaCheckin" class="form-control" placeholder="Digite bloco/unidade/nome/cpf/email" oninput="renderCheckin()">
-            </div>
-          </div>
-
-          <div class="table-responsive mt-3">
-            <table class="table table-sm align-middle">
-              <thead class="table-dark">
-                <tr>
-                  <th>Unidade</th><th>Nome</th><th>Status</th><th>Débito</th><th>Agregadas</th><th>Ação</th>
-                </tr>
-              </thead>
-              <tbody id="tbCheckin"></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ORDEM DO DIA -->
-      <section id="tabOrdem" class="tabPane d-none">
-        <div class="cardx p-3">
-          <div class="fw-bold fs-5">Ordem do Dia / Questões</div>
-          <div class="smallnote">Cole itens por ponto e vírgula (;) ou 1 item por linha. Em cada item, crie questões (1.1, 1.2...) com opções. Se já tiver voto, não edita: crie novo subitem.</div>
-
-          <div class="row g-2 mt-2">
-            <div class="col-md-10">
-              <label class="form-label small fw-bold">Itens (1 por linha ou separados por ;)</label>
-              <input id="txtItens" class="form-control" placeholder="Ex.: Aprovação de contas\nObras\nEleição síndico\n(ou: Aprovação de contas; Obras; Eleição síndico)">
-            </div>
-            <div class="col-md-2 d-grid">
-              <button class="btn btn-rr fw-bold" onclick="criarItensOrdem()">Gerar itens</button>
-            </div>
-          </div>
-
-          <div id="ordemContainer" class="mt-3"></div>
-        </div>
-      </section>
-
-      <!-- RESULTADOS -->
-      <section id="tabResultados" class="tabPane d-none">
-        <div class="cardx p-3">
-          <div class="d-flex justify-content-between flex-wrap gap-2">
-            <div>
-              <div class="fw-bold fs-5">Resultados</div>
-              <div class="smallnote">Totais em UNIDADE ou FRAÇÃO, com agregadas válidas. Votos anulados NÃO contam.</div>
-            </div>
-            <div class="d-flex gap-2">
-              <button class="btn btn-outline-secondary btn-sm" onclick="exportarRelatorioCSV()">Exportar CSV (votos)</button>
-              <button class="btn btn-outline-secondary btn-sm" onclick="window.print()">Imprimir</button>
-            </div>
-          </div>
-
-          <div class="row g-2 mt-2">
-            <div class="col-md-4">
-              <label class="form-label small fw-bold">Questão</label>
-              <select id="selQuestaoResultado" class="form-select" onchange="renderResultados()"></select>
-            </div>
-            <div class="col-md-8">
-              <div class="smallnote mt-4" id="resumoTopo"></div>
-            </div>
-          </div>
-
-          <div class="row g-2 mt-3">
-            <div class="col-lg-4">
-              <div class="cardx p-2">
-                <canvas id="chartPie" style="max-width:320px; max-height:320px;"></canvas>
-              </div>
-            </div>
-            <div class="col-lg-8">
-              <div class="cardx p-3">
-                <div class="fw-bold">Totais</div>
-                <div class="table-responsive mt-2">
-                  <table class="table table-sm">
-                    <thead class="table-dark"><tr><th>Opção</th><th>Total apurado</th><th>%</th></tr></thead>
-                    <tbody id="tbTotais"></tbody>
-                  </table>
-                </div>
-                <div class="smallnote"></div>
-              </div>
-            </div>
-          </div>
-
-          <div id="quemVotouBox" class="cardx p-3 mt-3 d-none"></div>
-        </div>
-      </section>
-
-      <!-- RELATÓRIOS -->
-      <section id="tabRelatorios" class="tabPane d-none">
-        <div class="cardx p-3">
-          <div class="fw-bold fs-5">Relatórios</div>
-          <div class="smallnote">Lista de presença e relatório detalhado de votos. Você pode incluir anulados no relatório final.</div>
-
-          <div class="d-flex gap-2 flex-wrap mt-2">
-            <button class="btn btn-outline-secondary btn-sm" onclick="renderPresenca()">Atualizar Presença</button>
-            <button class="btn btn-outline-secondary btn-sm" onclick="exportarPresencaCSV()">Exportar Presença CSV</button>
-          </div>
-          <div class="mt-2">
-            <label class="d-flex align-items-center gap-2 smallnote">
-              <input type="checkbox" id="chkOcultarPresencaManual" onchange="renderPresenca()">
+<div class="smallnote">Cole itens por ponto e vírgula (;) ou 1 item por linha. Em cada item, crie questões (1.1, 1.2...) com opções. Se já tiver voto, não edita: crie novo subitem.</div>
+<div class="row g-2 mt-2">
+<div class="col-md-10">
+<label class="form-label small fw-bold">Itens (1 por linha ou separados por ;)</label>
+<input class="form-control" id="txtItens" placeholder="Ex.: Aprovação de contas\nObras\nEleição síndico\n(ou: Aprovação de contas; Obras; Eleição síndico)"/>
+</div>
+<div class="col-md-2 d-grid">
+<button class="btn btn-rr fw-bold" onclick="criarItensOrdem()">Gerar itens</button>
+</div>
+</div>
+<div class="mt-3" id="ordemContainer"></div>
+</div>
+</section>
+<!-- RESULTADOS -->
+<section class="tabPane d-none" id="tabResultados">
+<div class="cardx p-3">
+<div class="d-flex justify-content-between flex-wrap gap-2">
+<div>
+<div class="fw-bold fs-5">Resultados</div>
+<div class="smallnote">Totais em UNIDADE ou FRAÇÃO, com agregadas válidas. Votos anulados NÃO contam.</div>
+</div>
+<div class="d-flex gap-2 no-print">
+<button class="btn btn-outline-secondary btn-sm" onclick="exportarRelatorioCSV()">Exportar CSV (votos)</button>
+<button class="btn btn-outline-dark btn-sm" onclick="imprimirSecao('secResultadosPrint','Resultados - Gráficos e Totais')"><i class="bi bi-filetype-pdf"></i> Salvar PDF</button>
+<button class="btn btn-outline-secondary btn-sm" onclick="imprimirSecao('secResultadosPrint','Resultados - Gráficos e Totais')"><i class="bi bi-printer"></i> Imprimir</button>
+</div>
+</div>
+<div class="row g-2 mt-2">
+<div class="col-md-4">
+<label class="form-label small fw-bold">Questão</label>
+<select class="form-select" id="selQuestaoResultado" onchange="renderResultados()"></select>
+</div>
+<div class="col-md-8">
+<div class="smallnote mt-4" id="resumoTopo"></div>
+</div>
+</div>
+<div id="secResultadosPrint"><div class="smallnote mb-2" id="resumoTopoPrint"></div><div class="row g-2 mt-3">
+<div class="col-lg-4">
+<div class="cardx p-2">
+<canvas id="chartPie" style="max-width:320px; max-height:320px;"></canvas>
+</div>
+</div>
+<div class="col-lg-8">
+<div class="cardx p-3">
+<div class="fw-bold">Totais</div>
+<div class="table-responsive mt-2">
+<table class="table table-sm">
+<thead class="table-dark"><tr><th>Opção</th><th>Total apurado</th><th>%</th></tr></thead>
+<tbody id="tbTotais"></tbody>
+</table>
+</div>
+<div class="smallnote"></div>
+</div>
+</div>
+</div></div>
+<div class="cardx p-3 mt-3 d-none" id="quemVotouBox"></div>
+</div>
+</section>
+<!-- RELATÓRIOS -->
+<section class="tabPane d-none" id="tabRelatorios">
+<div class="cardx p-3">
+<div class="fw-bold fs-5">Relatórios</div>
+<div class="smallnote">Lista de presença e relatório detalhado de votos. Você pode incluir anulados no relatório final.</div>
+<div class="d-flex gap-2 flex-wrap mt-2 no-print">
+<button class="btn btn-outline-secondary btn-sm" onclick="renderPresenca()">Atualizar Presença</button>
+<button class="btn btn-outline-secondary btn-sm" onclick="exportarPresencaCSV()">Exportar Presença CSV</button>
+<button class="btn btn-outline-dark btn-sm" onclick="prepararImpressao('RELATORIOS')"><i class="bi bi-filetype-pdf"></i> Salvar PDF</button>
+<button class="btn btn-outline-secondary btn-sm" onclick="prepararImpressao('RELATORIOS')"><i class="bi bi-printer"></i> Imprimir</button>
+</div>
+<div class="mt-2">
+<label class="d-flex align-items-center gap-2 smallnote">
+<input id="chkOcultarPresencaManual" onchange="renderPresenca()" type="checkbox"/>
               Ocultar marcação de inscrição manual na lista de presença
             </label>
-          </div>
-
-          <hr class="my-3">
-
-          <div class="fw-bold">Lista de presença (validados que acessaram ou voto manual)</div>
-          <div class="table-responsive mt-2">
-            <table class="table table-sm align-middle">
-              <thead class="table-dark">
-                <tr>
-                  <th>Unidade</th><th>Nome</th><th>Data/hora acesso</th><th>Representa</th>
-                </tr>
-              </thead>
-              <tbody id="tbPresenca"></tbody>
-            </table>
-          </div>
-
-          
-          <hr class="my-3">
-
-          <div class="fw-bold fs-6">Relatório por votação (por questão)</div>
-          <div class="smallnote">Mostra os votos agrupados por opção, na ordem cadastrada. Atualiza ao trocar UNIDADE/FRAÇÃO.</div>
-
-          <div class="row g-2 mt-2 align-items-end">
-            <div class="col-md-6">
-              <label class="form-label small fw-bold">Questão</label>
-              <select id="selRelQuestao" class="form-select" onchange="renderRelatorioPorQuestao()"></select>
-            </div>
-            <div class="col-md-6">
-              <label class="d-flex align-items-center gap-2 smallnote mt-4">
-                <input type="checkbox" id="chkOcultarAutorManualRel" onchange="renderRelatorioPorQuestao()">
+</div>
+<hr class="my-3"/>
+<div id="secPresenca">
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+<div class="fw-bold">Lista de presença (validados que acessaram ou voto manual)</div>
+<div class="no-print d-flex gap-2">
+<button class="btn btn-outline-dark btn-sm" onclick="imprimirSecao('secPresenca', 'Lista de presença')"><i class="bi bi-filetype-pdf"></i> Salvar PDF</button>
+<button class="btn btn-outline-secondary btn-sm" onclick="imprimirSecao('secPresenca', 'Lista de presença')"><i class="bi bi-printer"></i> Imprimir</button>
+</div>
+</div>
+<div class="table-responsive mt-2">
+<table class="table table-sm align-middle">
+<thead class="table-dark">
+<tr>
+<th>Unidade</th><th>Nome</th><th>Data/hora acesso</th><th>Representa</th>
+</tr>
+</thead>
+<tbody id="tbPresenca"></tbody>
+</table>
+</div>
+</div>
+<hr class="my-3"/>
+<div id="secRelPorQuestao"><div class="d-flex align-items-center justify-content-between flex-wrap gap-2"><div class="fw-bold fs-6">Relatório por votação (por questão)</div><div class="no-print d-flex gap-2"><button class="btn btn-outline-dark btn-sm" onclick="imprimirSecao('secRelPorQuestao','Relatório por votação (por questão)')"><i class="bi bi-filetype-pdf"></i> Salvar PDF</button><button class="btn btn-outline-secondary btn-sm" onclick="imprimirSecao('secRelPorQuestao','Relatório por votação (por questão)')"><i class="bi bi-printer"></i> Imprimir</button></div></div><div class="smallnote">Mostra os votos agrupados por opção, na ordem cadastrada. Atualiza ao trocar UNIDADE/FRAÇÃO.</div><div class="row g-2 mt-2 align-items-end">
+<div class="col-md-6">
+<label class="form-label small fw-bold">Questão</label>
+<select class="form-select" id="selRelQuestao" onchange="renderRelatorioPorQuestao()"></select>
+</div>
+<div class="col-md-6">
+<label class="d-flex align-items-center gap-2 smallnote mt-4">
+<input id="chkOcultarAutorManualRel" onchange="renderRelatorioPorQuestao()" type="checkbox"/>
                 Ocultar quem lançou voto manual
               </label>
-            </div>
-          </div>
+</div>
+</div><div class="mt-3" id="relPorQuestaoBox"></div></div>
 
-          <div id="relPorQuestaoBox" class="mt-3"></div>
 
-<hr class="my-3">
 
-          <div class="fw-bold d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <span>Votos (detalhado)</span>
-            <label class="d-flex align-items-center gap-2 smallnote">
-              <input type="checkbox" id="chkIncluirAnulados" onchange="renderVotosDetalhe()">
+<hr class="my-3"/>
+<div id="secVotosDetalhe"><div class="fw-bold d-flex align-items-center justify-content-between flex-wrap gap-2">
+<span>Votos (detalhado)</span>
+<label class="d-flex align-items-center gap-2 smallnote">
+<input id="chkIncluirAnulados" onchange="renderVotosDetalhe()" type="checkbox"/>
               Incluir anulados no relatório
             </label>
+<div class="no-print d-flex gap-2 ms-auto"><button class="btn btn-outline-dark btn-sm" onclick="imprimirSecao('secVotosDetalhe','Votos (detalhado)')"><i class="bi bi-filetype-pdf"></i> Salvar PDF</button><button class="btn btn-outline-secondary btn-sm" onclick="imprimirSecao('secVotosDetalhe','Votos (detalhado)')"><i class="bi bi-printer"></i> Imprimir</button></div></div><div class="d-flex gap-2 flex-wrap mt-2">
+<button class="btn btn-outline-secondary btn-sm" onclick="exportarRelatorioCSV()">Exportar Votos CSV</button>
+</div><div class="table-responsive mt-2">
+<table class="table table-sm align-middle">
+<thead class="table-dark">
+<tr>
+<th>Questão</th><th>Unidade</th><th>Opção</th><th>Peso UNID</th><th>Peso FRAÇÃO</th><th>Data/hora</th><th>Status</th><th>Representa</th>
+</tr>
+</thead>
+<tbody id="tbVotosDetalhe"></tbody>
+</table>
+</div></div>
+
+
+</div>
+</section>
+</main>
+</div>
+<!-- MORADOR ROOT -->
+<div id="moradorRoot">
+<div class="mor-top">
+<div class="d-flex align-items-center gap-2">
+<div class="brand">RR DIGIVOTE</div>
+<div class="smallnote">Acesso do morador (QR / CPF / e-mail)</div>
+</div>
+<div class="d-flex gap-2">
+<button class="btn btn-sm btn-outline-dark" onclick="moradorLogout()">Trocar usuário</button>
+<button class="btn btn-sm btn-dark" id="btnVoltarAdmin" onclick="voltarAdmin()">Voltar ao ADM</button>
+</div>
+</div>
+<div class="mor-wrap">
+<!-- LOGIN MORADOR -->
+<div class="cardx p-3" id="moradorLogin">
+<div class="fw-bold fs-5">Entrar na Assembleia</div>
+<div class="smallnote">Digite CPF (somente números) ou e-mail. Você precisa estar validado no check-in.</div>
+<div class="row g-2 mt-2">
+<div class="col-md-8">
+<label class="form-label small fw-bold">CPF ou e-mail</label>
+<input class="form-control" id="mIdent" placeholder="cpf ou email@dominio.com"/>
+</div>
+<div class="col-md-4 d-grid align-items-end">
+<button class="btn btn-rr fw-bold" onclick="moradorEntrar()">Acessar</button>
+</div>
+</div>
+<div class="mt-3 d-none" id="moradorMultiBox"></div>
+</div>
+<!-- PAINEL MORADOR -->
+<div class="d-none" id="moradorPainel">
+<div class="mor-head">
+<div class="mor-box">
+<div class="smallnote">Condomínio / Assembleia</div>
+<div class="fw-bold" id="mAssNome"></div>
+<div class="smallnote mt-1" id="mAssInfo"></div>
+<div class="smallnote mt-1 d-none" id="mAssObs"></div>
+</div>
+<div class="mor-box">
+<div class="d-flex justify-content-between gap-2">
+<div>
+<div class="smallnote">Unidade</div>
+<div class="fw-bold" id="mUnKey"></div>
+<div class="smallnote" id="mUnNome"></div>
+</div>
+<div class="text-end">
+<div class="badge text-bg-success badge-pill" id="mStatus">LIBERADO</div><br/>
+<button class="btn btn-sm btn-outline-dark mt-2" onclick="toggleMoradorExpand()">Expandir</button>
+<div class="mt-2 d-flex gap-2 justify-content-end flex-wrap d-none" id="mLiveBox">
+  <button class="btn btn-sm" id="btnLiveNovaAba" onclick="abrirSalaVirtual(true)">AO VIVO</button>
+  <button class="btn btn-sm btn-outline-primary d-none" id="btnChatMorador" onclick="abrirChatMorador()">Chat</button>
+</div>
+</div>
+</div>
+<div class="smallnote mt-2 d-none" id="mExpand"></div>
+</div>
+</div>
+<div class="mor-grid" id="moradorVotacoes"></div>
+</div>
+</div>
+</div>
+<!-- MODAL QR -->
+<div class="modal fade" id="modalQR" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">QR da Assembleia (link do morador)</h5>
+<button class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="smallnote">Use este QR/Link para acesso do morador.</div>
+<div class="mt-2 p-2 border rounded bg-light">
+<div class="smallnote">Link:</div>
+<div class="mono" id="qrLinkText" style="word-break:break-all;"></div>
+</div>
+<div class="mt-3 d-flex justify-content-center">
+<div id="qrBox"></div>
+</div>
+<div class="mt-3 d-grid">
+<button class="btn btn-outline-secondary" onclick="baixarQR()">Baixar PNG</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- MODAL AGREGACAO -->
+<div class="modal fade" id="modalAg" tabindex="-1">
+<div class="modal-dialog modal-lg">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Agregar unidades (procuração)</h5>
+<button class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="smallnote mb-2">Selecione unidades para serem representadas pela unidade principal.</div>
+<div class="row g-2">
+<div class="col-md-6">
+<label class="form-label small fw-bold">Principal</label>
+<input class="form-control" disabled="" id="agPrincipalLabel"/>
+</div>
+<div class="col-md-6">
+<label class="form-label small fw-bold">Buscar</label>
+<input class="form-control" id="agBusca" oninput="renderAgLista()" placeholder="filtrar..."/>
+</div>
+</div>
+<div class="mt-2" id="agLista"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- MODAL ANULAR VOTO (Resultados -> Quem votou) -->
+<div class="modal fade" id="modalAnularVoto" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title text-danger"><i class="bi bi-x-octagon"></i> Anular voto</h5>
+<button aria-label="Fechar" class="btn-close" data-bs-dismiss="modal" type="button"></button>
+</div>
+<div class="modal-body">
+<div class="smallnote mb-2">
+<b>Unidade:</b> <span id="anularUnidadeKey">-</span> • <b>Data/hora:</b> <span id="anularTs">-</span><br/>
+<b>Opção(ões):</b> <span id="anularOps">-</span>
+</div>
+<div class="alert alert-warning d-none" id="anularAvisoAgregado">
+            Este voto possui unidades agregadas. Selecione se deseja anular <b>todas</b> ou apenas algumas unidades (principal e/ou agregadas).
           </div>
-
-          <div class="d-flex gap-2 flex-wrap mt-2">
-            <button class="btn btn-outline-secondary btn-sm" onclick="exportarRelatorioCSV()">Exportar Votos CSV</button>
-          </div>
-
-          <div class="table-responsive mt-2">
-            <table class="table table-sm align-middle">
-              <thead class="table-dark">
-                <tr>
-                  <th>Questão</th><th>Unidade</th><th>Opção</th><th>Peso UNID</th><th>Peso FRAÇÃO</th><th>Data/hora</th><th>Status</th><th>Representa</th>
-                </tr>
-              </thead>
-              <tbody id="tbVotosDetalhe"></tbody>
-            </table>
-          </div>
-
-        </div>
-      </section>
-
-    </main>
-  </div>
-
-  <!-- MORADOR ROOT -->
-  <div id="moradorRoot">
-    <div class="mor-top">
-      <div class="d-flex align-items-center gap-2">
-        <div class="brand">RR DIGIVOTE</div>
-        <div class="smallnote">Acesso do morador (QR / CPF / e-mail)</div>
-      </div>
-      <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-dark" onclick="moradorLogout()">Trocar usuário</button>
-        <button class="btn btn-sm btn-dark" id="btnVoltarAdmin" onclick="voltarAdmin()">Voltar ao ADM</button>
-      </div>
-    </div>
-
-    <div class="mor-wrap">
-      <!-- LOGIN MORADOR -->
-      <div id="moradorLogin" class="cardx p-3">
-        <div class="fw-bold fs-5">Entrar na Assembleia</div>
-        <div class="smallnote">Digite CPF (somente números) ou e-mail. Você precisa estar validado no check-in.</div>
-
-        <div class="row g-2 mt-2">
-          <div class="col-md-8">
-            <label class="form-label small fw-bold">CPF ou e-mail</label>
-            <input id="mIdent" class="form-control" placeholder="cpf ou email@dominio.com">
-          </div>
-          <div class="col-md-4 d-grid align-items-end">
-            <button class="btn btn-rr fw-bold" onclick="moradorEntrar()">Acessar</button>
-          </div>
-        </div>
-
-        <div id="moradorMultiBox" class="mt-3 d-none"></div>
-      </div>
-
-      <!-- PAINEL MORADOR -->
-      <div id="moradorPainel" class="d-none">
-        <div class="mor-head">
-          <div class="mor-box">
-            <div class="smallnote">Condomínio / Assembleia</div>
-            <div class="fw-bold" id="mAssNome"></div>
-            <div class="smallnote mt-1" id="mAssInfo"></div>
-          </div>
-          <div class="mor-box">
-            <div class="d-flex justify-content-between gap-2">
-              <div>
-                <div class="smallnote">Unidade</div>
-                <div class="fw-bold" id="mUnKey"></div>
-                <div class="smallnote" id="mUnNome"></div>
-              </div>
-              <div class="text-end">
-                <div class="badge text-bg-success badge-pill" id="mStatus">LIBERADO</div><br/>
-                <button class="btn btn-sm btn-outline-dark mt-2" onclick="toggleMoradorExpand()">Expandir</button>
-              </div>
+<div class="cardx p-2">
+<div class="fw-bold mb-1">Unidades para anular</div>
+<div id="anularListaUnidades"></div>
+<div class="smallnote mt-2">
+              • Se você desmarcar alguma unidade, o voto será <b>recriado automaticamente</b> com o peso restante (recalcula total e gráficos).
             </div>
-            <div id="mExpand" class="smallnote mt-2 d-none"></div>
-          </div>
-        </div>
-
-        <div class="mor-grid" id="moradorVotacoes"></div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- MODAL QR -->
-  <div class="modal fade" id="modalQR" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">QR da Assembleia (link do morador)</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="smallnote">Use este QR/Link para acesso do morador.</div>
-          <div class="mt-2 p-2 border rounded bg-light">
-            <div class="smallnote">Link:</div>
-            <div class="mono" id="qrLinkText" style="word-break:break-all;"></div>
-          </div>
-          <div class="mt-3 d-flex justify-content-center">
-            <div id="qrBox"></div>
-          </div>
-          <div class="mt-3 d-grid">
-            <button class="btn btn-outline-secondary" onclick="baixarQR()">Baixar PNG</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL AGREGACAO -->
-  <div class="modal fade" id="modalAg" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Agregar unidades (procuração)</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="smallnote mb-2">Selecione unidades para serem representadas pela unidade principal.</div>
-          <div class="row g-2">
-            <div class="col-md-6">
-              <label class="form-label small fw-bold">Principal</label>
-              <input id="agPrincipalLabel" class="form-control" disabled>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label small fw-bold">Buscar</label>
-              <input id="agBusca" class="form-control" placeholder="filtrar..." oninput="renderAgLista()">
-            </div>
-          </div>
-          <div class="mt-2" id="agLista"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  
+</div>
+</div>
+<div class="modal-footer">
+<button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+<button class="btn btn-danger" onclick="confirmarAnularVotoSelecionado()">Anular</button>
+</div>
+</div>
+</div>
+</div>
 <!-- MODAL VOTO MANUAL -->
 <div class="modal fade" id="modalVotoManual" tabindex="-1">
-  <div class="modal-dialog modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Voto manual (assembleia aberta)</h5>
-        <button class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div class="smallnote">
+<div class="modal-dialog modal-lg">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Voto manual (assembleia aberta)</h5>
+<button class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="smallnote">
           Permitido enquanto a <b>assembleia estiver ABERTA</b>, com a questão <b>ABERTA ou FECHADA</b>.
           O voto manual entra na apuração normalmente (UNIDADE/FRAÇÃO) e aparece nos relatórios.
         </div>
+<div class="row g-2 mt-2">
+<div class="col-md-6">
+<label class="form-label small fw-bold">Unidade (ainda não votou)</label>
+<select class="form-select" id="vmSelUnidade" onchange="vmEscolherUnidade(this.value)"></select>
+<div class="smallnote mt-1" id="vmStatusUnidade"></div>
+</div>
+<div class="col-md-6">
+<label class="form-label small fw-bold">Opção de voto</label>
+<div class="border rounded p-2 bg-light" id="vmOps"></div>
+</div>
+</div>
+<div class="d-flex justify-content-end gap-2 mt-3">
+<button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+<button class="btn btn-rr fw-bold" onclick="gravarVotoManual()">Gravar voto</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- MODAL MINHA SENHA -->
+<div class="modal fade" id="modalMinhaSenha" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Alterar minha senha</h5>
+<button class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="smallnote mb-2">Para segurança, confirme sua senha atual.</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">Senha atual</label>
+<input class="form-control" id="msAtual" type="password"/>
+</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">Nova senha</label>
+<input class="form-control" id="msNova" type="password"/>
+</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">Confirmar nova senha</label>
+<input class="form-control" id="msConf" type="password"/>
+</div>
+<div class="d-grid mt-3">
+<button class="btn btn-rr fw-bold" onclick="salvarMinhaSenha()">Salvar</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- MODAL ESQUECI SENHA -->
+<div class="modal fade" id="modalEsqueciSenha" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Recuperar senha</h5>
+<button class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="smallnote mb-2">Informe seu <b>usuário</b> e confirme com <b>CPF</b> e/ou <b>e-mail</b> cadastrados.</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">Usuário</label>
+<input class="form-control" id="fpUser" placeholder="ex.: operador1"/>
+</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">CPF</label>
+<input class="form-control" id="fpCpf" placeholder="somente números"/>
+</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">E-mail</label>
+<input class="form-control" id="fpEmail" placeholder="email@dominio.com"/>
+</div>
+<div class="d-grid mt-3">
+<button class="btn btn-rr fw-bold" onclick="solicitarResetSenha()">Enviar link de redefinição</button>
+</div>
+<div class="smallnote mt-3" id="fpMsg"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- MODAL RESET SENHA (via link) -->
+<div class="modal fade" id="modalResetSenha" tabindex="-1">
+<div class="modal-dialog">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title">Definir nova senha</h5>
+<button class="btn-close" data-bs-dismiss="modal"></button>
+</div>
+<div class="modal-body">
+<div class="smallnote mb-2">Crie sua nova senha.</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">Nova senha</label>
+<input class="form-control" id="rpNova" type="password"/>
+</div>
+<div class="mb-2">
+<label class="form-label small fw-bold">Confirmar nova senha</label>
+<input class="form-control" id="rpConf" type="password"/>
+</div>
+<div class="d-grid mt-3">
+<button class="btn btn-rr fw-bold" onclick="aplicarResetSenha()">Salvar nova senha</button>
+</div>
+<div class="smallnote mt-3" id="rpMsg"></div>
+</div>
+</div>
+</div>
+</div>
+<canvas class="d-none" id="qrCanvasTemp"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-        <div class="row g-2 mt-2">
-          <div class="col-md-6">
-            <label class="form-label small fw-bold">Unidade (ainda não votou)</label>
-            <select id="vmSelUnidade" class="form-select" onchange="vmEscolherUnidade(this.value)"></select>
-            <div class="smallnote mt-1" id="vmStatusUnidade"></div>
-          </div>
-          <div class="col-md-6">
-            <label class="form-label small fw-bold">Opção de voto</label>
-            <div id="vmOps" class="border rounded p-2 bg-light"></div>
-          </div>
+<!-- MODAL SALA VIRTUAL -->
+<div class="modal fade" id="modalSalaVirtual" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Sala virtual</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="smallnote mb-2" id="svHint"></div>
+        <div class="ratio ratio-16x9 border rounded overflow-hidden bg-light">
+          <iframe id="svFrame" src="about:blank" allow="camera; microphone; fullscreen; display-capture" referrerpolicy="no-referrer"></iframe>
         </div>
-
-        <div class="d-flex justify-content-end gap-2 mt-3">
-          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button class="btn btn-rr fw-bold" onclick="gravarVotoManual()">Gravar voto</button>
-        </div>
-
+        <div class="smallnote mt-2">Se a sala não abrir aqui (alguns provedores bloqueiam), use o botão <b>AO VIVO</b> (nova aba).</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        <button class="btn btn-dark" onclick="abrirSalaVirtual(true)">Abrir em nova aba</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- MODAL MINHA SENHA -->
-  <div class="modal fade" id="modalMinhaSenha" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Alterar minha senha</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="smallnote mb-2">Para segurança, confirme sua senha atual.</div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Senha atual</label>
-            <input id="msAtual" type="password" class="form-control">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Nova senha</label>
-            <input id="msNova" type="password" class="form-control">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Confirmar nova senha</label>
-            <input id="msConf" type="password" class="form-control">
-          </div>
-          <div class="d-grid mt-3">
-            <button class="btn btn-rr fw-bold" onclick="salvarMinhaSenha()">Salvar</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  
-  <!-- MODAL ESQUECI SENHA -->
-  <div class="modal fade" id="modalEsqueciSenha" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Recuperar senha</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="smallnote mb-2">Informe seu <b>usuário</b> e confirme com <b>CPF</b> e/ou <b>e-mail</b> cadastrados.</div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Usuário</label>
-            <input id="fpUser" class="form-control" placeholder="ex.: operador1">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">CPF</label>
-            <input id="fpCpf" class="form-control" placeholder="somente números">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">E-mail</label>
-            <input id="fpEmail" class="form-control" placeholder="email@dominio.com">
-          </div>
-          <div class="d-grid mt-3">
-            <button class="btn btn-rr fw-bold" onclick="solicitarResetSenha()">Enviar link de redefinição</button>
-          </div>
-          <div class="smallnote mt-3" id="fpMsg"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL RESET SENHA (via link) -->
-  <div class="modal fade" id="modalResetSenha" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">Definir nova senha</h5>
-          <button class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-        <div class="modal-body">
-          <div class="smallnote mb-2">Crie sua nova senha.</div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Nova senha</label>
-            <input id="rpNova" type="password" class="form-control">
-          </div>
-          <div class="mb-2">
-            <label class="form-label small fw-bold">Confirmar nova senha</label>
-            <input id="rpConf" type="password" class="form-control">
-          </div>
-          <div class="d-grid mt-3">
-            <button class="btn btn-rr fw-bold" onclick="aplicarResetSenha()">Salvar nova senha</button>
-          </div>
-          <div class="smallnote mt-3" id="rpMsg"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-<canvas id="qrCanvasTemp" class="d-none"></canvas>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-  <script>
+<script>
     // =========================
     // STORAGE SAFE (Edge / file://)
     // =========================
@@ -1079,11 +1162,13 @@
 // ONLINE SYNC (Netlify Functions -> Supabase)
 // - Mantém o localStorage como fallback (offline)
 // - Sincroniza entre dispositivos via Netlify Functions (chaves ficam no servidor)
-const REMOTE_ENABLED = (location.protocol === "https:" || location.protocol === "http:");
+const REMOTE_ENABLED = ((location.protocol === "https:" || location.protocol === "http:") && !["localhost","127.0.0.1"].includes(location.hostname));
 
 async function remoteGetState(){
   const r = await fetch("/.netlify/functions/state_get", { cache: "no-store" });
-  const j = await r.json();
+  const ct = (r.headers.get("content-type")||"");
+  const j = ct.includes("application/json") ? await r.json() : {};
+  if(!ct.includes("application/json")) throw new Error("Resposta não-JSON (provável 404 das funções Netlify)");
   if(!j.ok) throw new Error(j.error || "Falha ao carregar estado online");
   return j.state || {};
 }
@@ -1094,7 +1179,9 @@ async function remoteSetState(stateObj){
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ state: stateObj })
   });
-  const j = await r.json().catch(()=>({}));
+  const ct = (r.headers.get("content-type")||"");
+  const j = ct.includes("application/json") ? await r.json().catch(()=>({})) : {};
+  if(!ct.includes("application/json")) throw new Error("Resposta não-JSON (provável 404 das funções Netlify)");
   if(!r.ok || !j.ok) throw new Error(j.error || "Falha ao salvar estado online");
   return true;
 }
@@ -1263,7 +1350,34 @@ async function tryRemoteLoadIntoState(){
       onStateUpdated();
     }
 
-    function logoutAdmin(){
+    
+
+function aplicarPermissoesPorPerfil(){
+  try{
+    const role = ((SESSION && SESSION.operador && SESSION.operador.role) ? SESSION.operador.role : "").toUpperCase();
+    if(role !== "GERENTE") return;
+
+    // Esconde abas administrativas (GERENTE: só Resultados + Ordem do Dia + Chat)
+    const hideTabs = ["tabClientes","tabOperadores","tabAssembleia","tabUnidades","tabCheckin","tabRelatorios"];
+    hideTabs.forEach(tid=>{
+      const btn = document.querySelector(`.navbtn[data-tab="${tid}"]`);
+      if(btn) btn.style.display = "none";
+    });
+
+    // Garante visibilidade das abas permitidas
+    ["tabOrdem","tabResultados"].forEach(tid=>{
+      const btn = document.querySelector(`.navbtn[data-tab="${tid}"]`);
+      if(btn) btn.style.display = "";
+    });
+
+    // Se estiver em uma aba bloqueada, redireciona
+    const active = document.querySelector(".navbtn.active")?.getAttribute("data-tab") || "";
+    if(hideTabs.includes(active)){
+      if(typeof switchTab === "function") switchTab("tabOrdem");
+    }
+  }catch(e){}
+}
+function logoutAdmin(){
       SESSION.operador = null;
       persistSession();
       document.getElementById("loginOverlay").style.display = "flex";
@@ -1433,6 +1547,8 @@ async function tryRemoteLoadIntoState(){
       if(!STATE.unidadesBaseByCliente[clienteId]) STATE.unidadesBaseByCliente[clienteId] = [];
     }
     function ensureAssembleiaRuntime(a){
+      if(a && a.salaLink===undefined) a.salaLink="";
+
       if(!a.checkin) a.checkin = {};
       if(!a.agregacoes) a.agregacoes = {};
       if(!a.itens) a.itens = [];
@@ -1487,6 +1603,9 @@ async function tryRemoteLoadIntoState(){
       renderRelatorioPorQuestaoInit();
       renderVotosDetalhe();
       updateBadges();
+      updatePrintHeader();
+      aplicarPermissoesPorPerfil();
+
     }
 
     function updateBadges(){
@@ -1690,6 +1809,8 @@ async function tryRemoteLoadIntoState(){
       const tipo = document.getElementById("assTipo").value;
       const tipoOutros = (document.getElementById("assTipoOutros").value||"").trim();
       const modalidade = document.getElementById("assModalidade").value;
+      const salaLink = (document.getElementById("assSalaLink")?.value || "").trim();
+      const obsMorador = (document.getElementById("assObs")?.value || "").trim();
       const apuracao = document.getElementById("assApuracao").value;
       const inicio = document.getElementById("assInicio").value ? new Date(document.getElementById("assInicio").value).toISOString() : "";
       const fim = document.getElementById("assFim").value ? new Date(document.getElementById("assFim").value).toISOString() : "";
@@ -1697,6 +1818,10 @@ async function tryRemoteLoadIntoState(){
       const sec = (document.getElementById("assSec").value||"").trim();
       if(!pres || !sec) return alert("Presidente e Secretário são obrigatórios.");
       if(!titulo) return alert("Informe o título.");
+
+      if((modalidade==="Online" || modalidade==="Híbrida" || modalidade==="Hibrida") && !salaLink){
+        return alert("Informe o link da sala virtual (obrigatório para modalidade Online/Híbrida).");
+      }
 
       if(EDIT.assembleiaId){
         const a = (STATE.assembleias||[]).find(x=>x.id===EDIT.assembleiaId);
@@ -1707,6 +1832,8 @@ async function tryRemoteLoadIntoState(){
         a.tipo = tipo;
         a.tipoOutros = (tipo==="Outros") ? tipoOutros : "";
         a.modalidade = modalidade;
+        a.salaLink = (modalidade==="Online" || modalidade==="Híbrida" || modalidade==="Hibrida") ? salaLink : (a.salaLink||"");
+        a.obsMorador = obsMorador;
         a.apuracao = apuracao;
         a.inicio = inicio;
         a.fim = fim;
@@ -1721,6 +1848,8 @@ async function tryRemoteLoadIntoState(){
           tipo,
           tipoOutros: (tipo==="Outros") ? tipoOutros : "",
           modalidade,
+          salaLink: (modalidade==="Online" || modalidade==="Híbrida" || modalidade==="Hibrida") ? salaLink : "",
+          obsMorador,
           apuracao,
           inicio, fim,
           presidente: pres,
@@ -1752,6 +1881,8 @@ async function tryRemoteLoadIntoState(){
       document.getElementById("assTipo").value = a.tipo||"Ordinária";
       document.getElementById("assTipoOutros").value = a.tipoOutros||"";
       document.getElementById("assModalidade").value = a.modalidade||"Presencial";
+      document.getElementById("assSalaLink").value = a.salaLink||"";
+      document.getElementById("assObs").value = a.obsMorador||"";
       document.getElementById("assApuracao").value = a.apuracao||"UNIDADE";
       document.getElementById("assInicio").value = a.inicio ? toLocalInputValue(a.inicio) : "";
       document.getElementById("assFim").value = a.fim ? toLocalInputValue(a.fim) : "";
@@ -1761,8 +1892,19 @@ async function tryRemoteLoadIntoState(){
       document.getElementById("assEditHint").innerText = "Editando assembleia: " + (a.titulo||"");
     }
 
+    function updateSalaVirtualField(){
+      try{
+        const mod = document.getElementById("assModalidade")?.value || "";
+        const wrap = document.getElementById("wrapSalaVirtual");
+        if(!wrap) return;
+        const show = (mod==="Online" || mod==="Híbrida" || mod==="Hibrida");
+        wrap.classList.toggle("d-none", !show);
+      }catch(e){ console.error(e); }
+    }
+
+
     function limparAssembleiaForm(){
-      ["assTitulo","assTipoOutros","assPres","assSec"].forEach(id=>document.getElementById(id).value="");
+      ["assTitulo","assTipoOutros","assPres","assSec","assSalaLink","assObs"].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=""; });
       document.getElementById("assTipo").value = "Ordinária";
       document.getElementById("assModalidade").value = "Presencial";
       document.getElementById("assApuracao").value = "UNIDADE";
@@ -1831,42 +1973,69 @@ async function tryRemoteLoadIntoState(){
       const box = document.getElementById("quemVotouBox");
       if(!a || !cliId || !qid) return;
       ensureAssembleiaRuntime(a);
+
       const modoAp = (a.apuracao||"UNIDADE");
-      const votos = (a.votos||[]).filter(v=>v.questaoId===qid && !v.anulado && v.opcao===opcao);
       const listU = getUnidadesCliente(cliId);
 
-      const totalAp = votos.reduce((acc,v)=> acc + (modoAp==="FRACAO" ? Number(v.pesoFracao||0) : Number(v.pesoUnidade||1)), 0);
+      // pega somente votos válidos que tenham esta opção
+      const votosOp = (a.votos||[]).filter(v=>v.questaoId===qid && !v.anulado && v.opcao===opcao);
 
-      const rows = votos.slice().sort((x,y)=>(x.ts||"").localeCompare(y.ts||""))
-        .map(v=>{
-          const u = listU.find(x=>unitKey(x)===v.unidadeKey);
-          const w = (modoAp==="FRACAO") ? Number(v.pesoFracao||0).toFixed(6) : String(Number(v.pesoUnidade||1));
-          const reps = (v.representadas && v.representadas.length) ? v.representadas.join(", ") : "-";
-          const origem = (v.tipo==="MANUAL") ? `<span class="badge text-bg-warning">MANUAL</span>` : `<span class="badge text-bg-secondary">NORMAL</span>`;
-          return `<tr>
-            <td><b>${escapeHtml(v.unidadeKey)}</b><div class="smallnote">${escapeHtml(u?.nome||"")}</div></td>
-            <td>${w}</td>
-            <td class="smallnote">${escapeHtml(reps)}</td>
-            <td>${origem}</td>
-            <td class="smallnote">${fmtDT(v.ts)}</td>
-          </tr>`;
-        }).join("");
+      // agrupa por "evento" de voto (unidade + timestamp)
+      const groups = {};
+      votosOp.forEach(v=>{
+        const k = `${v.unidadeKey}||${v.ts||""}`;
+        if(!groups[k]) groups[k] = { unidadeKey:v.unidadeKey, ts:v.ts, rows:[] };
+        groups[k].rows.push(v);
+      });
+
+      // expande cada grupo para incluir TODAS as opções registradas naquele mesmo timestamp
+      const grpArr = Object.values(groups).map(g=>{
+        const all = (a.votos||[]).filter(v=>v.questaoId===qid && v.unidadeKey===g.unidadeKey && v.ts===g.ts && !v.anulado);
+        const ops = [...new Set(all.map(x=>x.opcao))];
+        const first = all[0] || g.rows[0];
+        const reps = (first?.representadas && first.representadas.length) ? first.representadas.slice() : [];
+        const w = (modoAp==="FRACAO") ? Number(first?.pesoFracao||0) : Number(first?.pesoUnidade||1);
+        const origem = (first?.tipo==="MANUAL") ? `<span class="badge text-bg-warning">MANUAL</span>` : `<span class="badge text-bg-secondary">NORMAL</span>`;
+        return { unidadeKey:g.unidadeKey, ts:g.ts, ops, reps, peso:w, origem, first };
+      }).sort((x,y)=>(x.ts||"").localeCompare(y.ts||""));
+
+      const totalAp = grpArr.reduce((acc,g)=> acc + Number(g.peso||0), 0);
+
+      const rows = grpArr.map(g=>{
+        const u = listU.find(x=>unitKey(x)===g.unidadeKey);
+        const wTxt = (modoAp==="FRACAO") ? Number(g.peso||0).toFixed(6) : String(Number(g.peso||0));
+        const repsTxt = g.reps.length ? g.reps.join(", ") : "-";
+        const opsTxt = g.ops.map(x=>escapeHtml(x)).join(", ");
+        const canAnular = isAdminLike(); // anular só para admin/operador
+        const btnAnular = canAnular
+          ? `<button class="btn btn-sm btn-outline-danger" onclick="abrirModalAnularVoto('${escapeJS(qid)}','${escapeJS(g.unidadeKey)}','${escapeJS(g.ts||"")}','${escapeJS(opcao)}')">Anular</button>`
+          : ``;
+
+        return `<tr>
+          <td><b>${escapeHtml(g.unidadeKey)}</b><div class="smallnote">${escapeHtml(u?.nome||"")}</div></td>
+          <td class="smallnote">${opsTxt}</td>
+          <td>${wTxt}</td>
+          <td class="smallnote">${escapeHtml(repsTxt)}</td>
+          <td>${g.origem}</td>
+          <td class="smallnote">${fmtDT(g.ts)}</td>
+          <td class="text-end">${btnAnular}</td>
+        </tr>`;
+      }).join("");
 
       box.innerHTML = `
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div>
             <div class="fw-bold">Quem votou em: ${escapeHtml(opcao)}</div>
-            <div class="smallnote">Total apurado (${modoAp}): <b>${modoAp==="FRACAO" ? totalAp.toFixed(6) : totalAp}</b> • Registros: <b>${votos.length}</b></div>
+            <div class="smallnote">Total apurado (${modoAp}): <b>${modoAp==="FRACAO" ? totalAp.toFixed(6) : totalAp}</b> • Votos: <b>${grpArr.length}</b></div>
           </div>
           <button class="btn btn-sm btn-outline-secondary" onclick="fecharQuemVotouResultado()">Fechar</button>
         </div>
         <div class="table-responsive mt-2">
           <table class="table table-sm align-middle">
-            <thead class="table-dark"><tr><th>Unidade</th><th>Peso</th><th>Representa</th><th>Origem</th><th>Data/hora</th></tr></thead>
-            <tbody>${rows || `<tr><td colspan="5" class="smallnote">Sem votos.</td></tr>`}</tbody>
+            <thead class="table-dark"><tr><th>Unidade</th><th>Opção(ões)</th><th>Peso</th><th>Representa</th><th>Origem</th><th>Data/hora</th><th class="text-end">Ações</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="7" class="smallnote">Sem votos.</td></tr>`}</tbody>
           </table>
         </div>
-        <div class="smallnote">Para anular votos, use o Relatório detalhado.</div>
       `;
       box.classList.remove("d-none");
       box.scrollIntoView({behavior:"smooth", block:"start"});
@@ -1876,6 +2045,124 @@ async function tryRemoteLoadIntoState(){
       box.classList.add("d-none");
       box.innerHTML = "";
     }
+
+
+    // =========================
+    // Anulação de voto (Resultados -> "Quem votou")
+    // =========================
+    let ANULAR_CTX = null;
+
+    function abrirModalAnularVoto(qid, unidadeKey, ts, opcaoOrig){
+      if(!isAdminLike()) return alert("Sem permissão.");
+      const a = getAssembleia();
+      const cliId = STATE.clienteAtivoId;
+      if(!a || !cliId) return alert("Selecione assembleia.");
+      ensureAssembleiaRuntime(a);
+
+      const votosGrupo = (a.votos||[]).filter(v=>v.questaoId===qid && v.unidadeKey===unidadeKey && v.ts===ts && !v.anulado);
+      if(!votosGrupo.length) return alert("Voto não encontrado (pode já ter sido anulado).");
+
+      const first = votosGrupo[0];
+      const units = [unidadeKey].concat((first.representadas||[]));
+
+      ANULAR_CTX = { qid, unidadeKey, ts, opcaoOrig, units, first };
+
+      document.getElementById("anularUnidadeKey").innerText = unidadeKey;
+      document.getElementById("anularTs").innerText = fmtDT(ts);
+      document.getElementById("anularOps").innerText = [...new Set(votosGrupo.map(v=>v.opcao))].join(", ") || "-";
+
+      const box = document.getElementById("anularListaUnidades");
+      box.innerHTML = units.map((uk,i)=>{
+        const lbl = (i===0) ? `${uk} (principal)` : uk;
+        return `<label class="d-flex align-items-center gap-2 mb-1">
+          <input type="checkbox" class="form-check-input" value="${escapeAttr(uk)}" checked>
+          <span>${escapeHtml(lbl)}</span>
+        </label>`;
+      }).join("");
+
+      document.getElementById("anularAvisoAgregado").classList.toggle("d-none", units.length<=1);
+
+      new bootstrap.Modal(document.getElementById("modalAnularVoto")).show();
+    }
+
+    function confirmarAnularVotoSelecionado(){
+      if(!ANULAR_CTX) return;
+      const a = getAssembleia();
+      const cliId = STATE.clienteAtivoId;
+      if(!a || !cliId) return;
+      ensureAssembleiaRuntime(a);
+
+      const checks = Array.from(document.querySelectorAll("#anularListaUnidades input[type=checkbox]"));
+      const selAnular = checks.filter(x=>x.checked).map(x=>x.value);
+
+      if(!selAnular.length) return alert("Selecione pelo menos uma unidade para anular.");
+
+      const { qid, unidadeKey, ts } = ANULAR_CTX;
+      const votosGrupo = (a.votos||[]).filter(v=>v.questaoId===qid && v.unidadeKey===unidadeKey && v.ts===ts && !v.anulado);
+      if(!votosGrupo.length) return alert("Voto não encontrado (pode já ter sido anulado).");
+
+      const allUnits = ANULAR_CTX.units.slice();
+      const remanescentes = allUnits.filter(u=>!selAnular.includes(u));
+      const anulouTudo = (remanescentes.length===0);
+
+      // anula o grupo inteiro (registro original)
+      votosGrupo.forEach(v=>{
+        v.anulado = true;
+        v.anuladoPor = "ADMIN";
+        v.anuladoTs = nowISO();
+      });
+
+      // se foi parcial, recria voto com peso recalculado para as unidades REMANESCENTES
+      if(!anulouTudo){
+        const list = getUnidadesCliente(cliId);
+        const fracaoByKey = (k)=>{
+          const u = list.find(x=>unitKey(x)===k);
+          return Number(u?.fracao||0);
+        };
+
+        const pesoUnidade = remanescentes.length;
+        const pesoFracao = remanescentes.reduce((acc,k)=> acc + fracaoByKey(k), 0);
+
+        // mantém a mesma unidadeKey (principal), mas lista as remanescentes como representadas (se houver)
+        const representadas = remanescentes.filter(k=>k!==unidadeKey);
+
+        const opcoes = [...new Set(votosGrupo.map(v=>v.opcao))];
+        opcoes.forEach(op=>{
+          const novo = {
+            id: uuid("V"),
+            questaoId: qid,
+            unidadeKey,
+            opcao: op,
+            ts: nowISO(),
+            anulado: false,
+            pesoUnidade,
+            pesoFracao,
+            representadas
+          };
+          // preserva marcações quando existirem
+          if(ANULAR_CTX.first?.tipo) novo.tipo = ANULAR_CTX.first.tipo;
+          if(ANULAR_CTX.first?.lancadoPor) novo.lancadoPor = ANULAR_CTX.first.lancadoPor;
+
+          // marca como ajuste por anulação parcial
+          novo.ajustePorAnulacao = true;
+          a.votos.push(novo);
+        });
+      }
+
+      saveState();
+      renderResultados();
+      renderRelatorioPorQuestao();
+      renderVotosDetalhe();
+
+      // reabre a lista para a opção original (se ainda existir)
+      const op = ANULAR_CTX.opcaoOrig;
+      ANULAR_CTX = null;
+      bootstrap.Modal.getInstance(document.getElementById("modalAnularVoto"))?.hide();
+      if(op) mostrarQuemVotouResultado(op);
+    }
+
+
+
 
     function toggleAssembleiaAtiva(){
       const a = getAssembleia();
@@ -2721,6 +3008,8 @@ async function tryRemoteLoadIntoState(){
       document.getElementById("adminRoot").style.display = "block";
     }
     function moradorLogout(){
+      try{ if(MORADOR && MORADOR._liveTimer){ clearInterval(MORADOR._liveTimer); MORADOR._liveTimer=null; } }catch(e){}
+
       MORADOR = { unidadeKey:"", clienteId:"", assembleiaId:"" };
       document.getElementById("moradorPainel").classList.add("d-none");
       document.getElementById("moradorLogin").classList.remove("d-none");
@@ -2739,6 +3028,9 @@ async function tryRemoteLoadIntoState(){
         const aid = decodeURIComponent(m[1]);
         const a = (STATE.assembleias||[]).find(x=>x.id===aid);
         if(a){
+          // abre direto no acesso do morador (sem tela de login do admin)
+          const lo = document.getElementById("loginOverlay");
+          if(lo) lo.style.display = "none";
           document.getElementById("adminRoot").style.display = "none";
           document.getElementById("moradorRoot").style.display = "block";
           MORADOR.assembleiaId = a.id;
@@ -2746,6 +3038,7 @@ async function tryRemoteLoadIntoState(){
           MORADOR.only = true;
           const b = document.getElementById('btnVoltarAdmin');
           if(b) b.style.display = 'none';
+          setTimeout(()=>{ try{ document.getElementById("mIdent")?.focus(); }catch(e){} }, 200);
         }
       }
     }
@@ -2848,6 +3141,82 @@ async function tryRemoteLoadIntoState(){
       }catch(e){ console.error(e); }
     }
 
+    function isLiveNow(a){
+      try{
+        if(!a) return false;
+        const ini = a.inicio ? new Date(a.inicio).getTime() : 0;
+        const fim = a.fim ? new Date(a.fim).getTime() : 0;
+        const now = Date.now();
+        if(ini && fim) return now >= ini && now <= fim;
+        if(ini && !fim) return now >= ini;
+        if(!ini && fim) return now <= fim;
+        return false;
+      }catch(e){ return false; }
+    }
+
+    function updateMoradorLiveButtons(){
+      try{
+        const a = getMoradorAssembleia();
+        if(!a) return;
+        const box = document.getElementById("mLiveBox");
+        if(!box) return;
+
+        const mod = a.modalidade || "";
+        const hasLink = !!(a.salaLink && String(a.salaLink).trim());
+        const show = hasLink && (mod==="Online" || mod==="Híbrida" || mod==="Hibrida");
+        if(!show){
+          box.classList.add("d-none");
+          return;
+        }
+
+        const live = isLiveNow(a);
+        box.classList.remove("d-none");
+
+        const b1 = document.getElementById("btnLiveNovaAba");
+
+        if(live){
+          if(b1){
+            b1.disabled = false;
+            b1.className = "btn btn-sm btn-success";
+            b1.innerText = "AO VIVO";
+          }
+        } else {
+          if(b1){
+            b1.disabled = true;
+            b1.className = "btn btn-sm btn-danger";
+            b1.innerText = "Sala virtual (agendada)";
+          }
+        }
+      }catch(e){ console.error(e); }
+    }
+
+    function abrirSalaVirtual(novaAba=true){
+      const a = getMoradorAssembleia();
+      if(!a || !a.salaLink) return;
+      const link = String(a.salaLink).trim();
+      if(!link) return;
+
+      if(novaAba){
+        window.open(link, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      try{
+        const hint = document.getElementById("svHint");
+        if(hint) hint.innerText = `${(a.titulo||"Assembleia")} • ${a.modalidade}`;
+        const frame = document.getElementById("svFrame");
+        if(frame) frame.src = link;
+
+        const modalEl = document.getElementById("modalSalaVirtual");
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+      }catch(e){
+        console.error(e);
+        window.open(link, "_blank", "noopener,noreferrer");
+      }
+    }
+
+
     function montarPainelMorador(){
       const a = getMoradorAssembleia();
       const c = getMoradorCliente();
@@ -2865,9 +3234,21 @@ async function tryRemoteLoadIntoState(){
         `${tipoTxt} • ${a.modalidade} • Status: ${a.status} • Apuração: ${a.apuracao} • ` +
         `${(a.inicio?fmtDT(a.inicio):"")} → ${(a.fim?fmtDT(a.fim):"")}`;
 
+      const obsEl = document.getElementById("mAssObs");
+      const obsTxt = (a.obsMorador||"").trim();
+      if(obsEl){
+        if(obsTxt){ obsEl.classList.remove("d-none"); obsEl.innerText = obsTxt; }
+        else { obsEl.classList.add("d-none"); obsEl.innerText=""; }
+      }
+
       document.getElementById("mUnKey").innerText = MORADOR.unidadeKey;
       document.getElementById("mUnNome").innerText = u.nome || "";
       document.getElementById("mStatus").innerText = "LIBERADO";
+
+      updateMoradorLiveButtons();
+      if(MORADOR && !MORADOR._liveTimer){
+        MORADOR._liveTimer = setInterval(updateMoradorLiveButtons, 15000);
+      }
 
       const reps = (a.agregacoes[MORADOR.unidadeKey]||[]);
       const repsValidas = reps.filter(rk=>{
@@ -3260,6 +3641,7 @@ function renderResultados(){
       const cliId = STATE.clienteAtivoId;
       const qid = document.getElementById("selQuestaoResultado").value;
       const resumoTopo = document.getElementById("resumoTopo");
+      const resumoTopoPrint = document.getElementById("resumoTopoPrint");
       const tbTotais = document.getElementById("tbTotais");
       const quemBox = document.getElementById("quemVotouBox");
       quemBox.classList.add("d-none");
@@ -3267,6 +3649,7 @@ function renderResultados(){
 
       if(!a || !cliId || !qid){
         resumoTopo.innerText = "Selecione assembleia e questão.";
+        if(resumoTopoPrint) resumoTopoPrint.innerText = "Selecione assembleia e questão.";
         tbTotais.innerHTML = "";
         drawPie([],[]);
         return;
@@ -3276,6 +3659,7 @@ function renderResultados(){
       const q = findQuestao(a,qid);
       if(!q){
         resumoTopo.innerText = "Questão inválida.";
+        if(resumoTopoPrint) resumoTopoPrint.innerText = "Questão inválida.";
         tbTotais.innerHTML = "";
         drawPie([],[]);
         return;
@@ -3289,6 +3673,7 @@ function renderResultados(){
       const totalApurado = votos.reduce((acc,v)=> acc + (modoAp==="FRACAO" ? Number(v.pesoFracao||0) : Number(v.pesoUnidade||1)), 0);
 
       resumoTopo.innerHTML = `Registros válidos: <b>${totalRegistros}</b> • Total apurado (${modoAp}): <b>${modoAp==="FRACAO"? totalApurado.toFixed(6) : totalApurado}</b>`;
+      if(resumoTopoPrint) resumoTopoPrint.innerHTML = resumoTopo.innerHTML;
 
       const map = {};
       (q.opcoes||[]).forEach(op=> map[op] = {op, total:0, votantes:0});
@@ -3307,9 +3692,17 @@ function renderResultados(){
       tbTotais.innerHTML = arr.map(x=>{
         const pct = totalApurado>0 ? (x.total/totalApurado*100) : 0;
         const totalTxt = (modoAp==="FRACAO") ? x.total.toFixed(6) : String(x.total);
-        return `<tr style="cursor:pointer" onclick="mostrarQuemVotouResultado('${escapeJS(x.op)}')">
+
+        const temVoto = Number(x.total||0) > 0;
+        const totalCell = temVoto
+          ? `<a href="#" onclick="mostrarQuemVotouResultado('${escapeJS(x.op)}'); return false;">${totalTxt}</a>`
+          : `<span class="text-muted">${totalTxt}</span>`;
+
+        const trAttrs = temVoto ? `style="cursor:pointer" onclick="mostrarQuemVotouResultado('${escapeJS(x.op)}')"` : ``;
+
+        return `<tr ${trAttrs}>
           <td><b>${escapeHtml(x.op)}</b></td>
-          <td><a href="#" onclick="mostrarQuemVotouResultado('${escapeJS(x.op)}'); return false;">${totalTxt}</a></td>
+          <td>${totalCell}</td>
           <td>${pct.toFixed(2)}%</td>
         </tr>`;
       }).join("");
@@ -3317,12 +3710,39 @@ function renderResultados(){
       renderVotosDetalhe();
     }
 
+    
+    const CHART_PALETTE = [
+      "#1f77b4", // azul
+      "#ff7f0e", // laranja
+      "#2ca02c", // verde
+      "#7f7f7f", // cinza
+      "#9467bd", // roxo
+      "#17becf", // ciano
+      "#bcbd22", // oliva
+      "#d62728"  // vermelho
+    ];
+
+    function chartColors(n){
+      const out = [];
+      for(let i=0;i<n;i++) out.push(CHART_PALETTE[i % CHART_PALETTE.length]);
+      return out;
+    }
+
     function drawPie(labels, data, totalApurado=0){
       const ctx = document.getElementById("chartPie");
       if(PIE) PIE.destroy();
+      const colors = chartColors(labels.length || data.length || 0);
       PIE = new Chart(ctx, {
         type: "pie",
-        data: { labels, datasets: [{ data }] },
+        data: { 
+          labels, 
+          datasets: [{ 
+            data,
+            backgroundColor: colors,
+            borderColor: "#ffffff",
+            borderWidth: 1
+          }] 
+        },
         options: {
           plugins:{
             legend:{ position:"bottom" },
@@ -3339,6 +3759,7 @@ function renderResultados(){
         }
       });
     }
+
 
     function mostrarQuemVotou(qid, opcao){
       const a = getAssembleia();
@@ -3668,7 +4089,106 @@ function gravarVotoManual(){
       downloadCSV("presenca.csv", rows);
     }
 
-    function exportarRelatorioCSV(){
+    
+    // =========================
+    // Impressão / PDF (Result. e Relatórios)
+    // =========================
+    function updatePrintHeader(){
+      const a = getAssembleia();
+      const cli = (STATE.clientes||[]).find(x=>x.id===STATE.clienteAtivoId) || null;
+      const l1 = document.getElementById("printHeaderLine1");
+      const l2 = document.getElementById("printHeaderLine2");
+      if(!l1 || !l2) return;
+
+      const cliNome = cli?.nome || "-";
+      const assTxt = a ? (a.titulo || a.id || "-") : "-";
+      const modTxt = a ? (a.modalidade || "-") : "-";
+      const stTxt  = a ? (a.status || "-") : "-";
+      const apTxt  = a ? (a.apuracao || "UNIDADE") : "-";
+
+      l1.innerHTML = `<b>Cliente:</b> ${escapeHtml(cliNome)} • <b>Assembleia:</b> ${escapeHtml(assTxt)}`;
+      l2.innerHTML = `<b>Modalidade:</b> ${escapeHtml(modTxt)} • <b>Status:</b> ${escapeHtml(stTxt)} • <b>Apuração:</b> ${escapeHtml(apTxt)} • <b>Gerado em:</b> ${fmtDT(nowISO())}`;
+    }
+
+    function imprimirSecao(sectionId, tituloSecao){
+      updatePrintHeader();
+
+      const src = document.getElementById(sectionId);
+      if(!src) return alert("Seção para impressão não encontrada.");
+
+      // clona a seção e remove controles
+      const clone = src.cloneNode(true);
+
+      // remove botões/controles marcados como no-print e inputs
+      clone.querySelectorAll(".no-print, button, input, select, textarea, .dropdown, .btn, .btn-group").forEach(el=>{
+        // preserva tabelas/estruturas que usam botões como parte de células? (regra: só remove botões)
+        if(el.tagName==="BUTTON" || el.classList.contains("btn") || el.classList.contains("btn-group") || el.classList.contains("dropdown") || el.classList.contains("no-print")){
+          el.remove();
+        }
+      });
+
+      // converte canvases em imagens para garantir impressão/PDF
+      const origCanvases = src.querySelectorAll("canvas");
+      const cloneCanvases = clone.querySelectorAll("canvas");
+      cloneCanvases.forEach((cv,i)=>{
+        const oc = origCanvases[i];
+        try{
+          const img = document.createElement("img");
+          img.src = oc?.toDataURL("image/png") || "";
+          img.style.maxWidth = "100%";
+          img.style.height = "auto";
+          cv.replaceWith(img);
+        }catch(e){
+          // se falhar, mantém o canvas
+        }
+      });
+
+      const area = document.getElementById("printArea");
+      area.innerHTML = "";
+      if(tituloSecao){
+        const h = document.createElement("div");
+        h.className = "fw-bold fs-5 mb-2";
+        h.textContent = tituloSecao;
+        area.appendChild(h);
+      }
+      area.appendChild(clone);
+
+      // ativa modo impressão focada
+      document.body.classList.add("printing");
+      area.classList.remove("d-none");
+
+      // imprime e restaura
+      const restore = ()=>{
+        document.body.classList.remove("printing");
+        area.classList.add("d-none");
+        area.innerHTML = "";
+        window.removeEventListener("afterprint", restore);
+      };
+      window.addEventListener("afterprint", restore);
+
+      setTimeout(()=>window.print(), 50);
+    }
+
+    function prepararImpressao(origem){
+      // origem: 'RESULTADOS' | 'RELATORIOS'
+      try{
+        if(origem==="RESULTADOS") showTab("tabResultados");
+        if(origem==="RELATORIOS") showTab("tabRelatorios");
+      }catch(e){}
+
+      // garante render atual antes de capturar para impressão
+      try{
+        if(origem==="RESULTADOS") renderResultados();
+        if(origem==="RELATORIOS"){ renderRelatorioPorQuestao(); renderVotosDetalhe(); renderPresenca(); }
+      }catch(e){}
+
+      // imprime somente a aba correspondente
+      if(origem==="RESULTADOS") return imprimirSecao("tabResultados", "Resultados");
+      if(origem==="RELATORIOS") return imprimirSecao("tabRelatorios", "Relatórios");
+      return window.print();
+    }
+
+function exportarRelatorioCSV(){
       const a = getAssembleia();
       if(!a) return alert("Selecione assembleia.");
       ensureAssembleiaRuntime(a);
@@ -3745,6 +4265,13 @@ function gravarVotoManual(){
     // Inicial
     // =========================
     document.addEventListener("DOMContentLoaded", async ()=>{
+      // Sala virtual (Online / Híbrida)
+      const modSel = document.getElementById("assModalidade");
+      if(modSel){
+        modSel.addEventListener("change", ()=>{ updateSalaVirtualField(); });
+      }
+      updateSalaVirtualField();
+
       await loadState();
       restoreSession();
       checkResetHash();
@@ -3755,9 +4282,366 @@ function gravarVotoManual(){
       // se entrou via hash morador
       autoOpenMoradorByHash();
     });
-  </script>
+  
+// === SUPABASE (CONFIG) ===
+// =========================
+// CHAT (Supabase) — SIMPLES (SEM REALTIME)
+// - grava no Supabase
+// - Atualizar faz SELECT
+// - Privado: morador conversa só com ADM; ADM escolhe unidade
+// - Público: morador só lê (pode mencionar com @)
+// =========================
 
-  <div id="dbStatus" style="position:fixed;bottom:8px;left:8px;z-index:9999;font-size:12px;background:#0008;color:#fff;padding:4px 8px;border-radius:8px;">DB: -</div>
+let CHAT = {
+  open:false,
+  role:null,           // "MORADOR" | "ADM" | "MASTER" | "GERENTE"
+  mode:"private",      // "private" | "public"
+  assemblyId:null,
+  unitKey:null,        // morador: unidade; adm/gerente: unidade selecionada no privado
+  senderName:""
+};
+
+function supabaseConfigOk(){
+  try{
+    return !!(window.supabase && typeof supabase !== "undefined" && SUPABASE_URL && SUPABASE_ANON_KEY);
+  }catch(e){
+    return false;
+  }
+}
+
+function getChatConfigFromAssembleia(a){
+  return {
+    enabled: !!a.chatEnabled,
+    mode: (a.chatMode === "public") ? "public" : "private"
+  };
+}
+
+function onChatConfigChange(){
+  const a = getAssembleia();
+  if(!a) return;
+  a.chatEnabled = !!document.getElementById("chatEnabledSwitch").checked;
+  a.chatMode = document.getElementById("chatModeSel").value;
+  saveState();
+  renderMoradorChatButton(); // se morador estiver aberto
+}
+
+function syncChatConfigUI(){
+  const a = getAssembleia();
+  if(!a) return;
+  const cfg = getChatConfigFromAssembleia(a);
+  const sw = document.getElementById("chatEnabledSwitch");
+  const sel = document.getElementById("chatModeSel");
+  if(sw) sw.checked = cfg.enabled;
+  if(sel) sel.value = cfg.mode;
+}
+
+function renderMoradorChatButton(){
+  try{
+    const a = getMoradorAssembleia();
+    if(!a) return;
+    const cfg = getChatConfigFromAssembleia(a);
+    const btn = document.getElementById("btnChatMorador");
+    if(!btn) return;
+
+    // botão aparece abaixo do "AO VIVO" (fica dentro do box)
+    if(cfg.enabled){
+      btn.classList.remove("d-none");
+      btn.style.display = "";
+    } else {
+      btn.classList.add("d-none");
+    }
+  }catch(e){}
+}
+
+// Hook: quando abrir o painel do morador, mostrar/ocultar chat
+const _old_montarPainelMorador = window.montarPainelMorador;
+window.montarPainelMorador = function(){
+  _old_montarPainelMorador();
+  renderMoradorChatButton();
+};
+
+function abrirChatOverlay(){
+  const o = document.getElementById("chatOverlay");
+  if(o) o.style.display = "flex";
+  CHAT.open = true;
+}
+function fecharChat(){
+  const o = document.getElementById("chatOverlay");
+  if(o) o.style.display = "none";
+  CHAT.open = false;
+}
+
+function setChatHeader(title, subtitle){
+  const t = document.getElementById("chatTitle");
+  const s = document.getElementById("chatSubtitle");
+  if(t) t.innerText = title || "Chat";
+  if(s) s.innerText = subtitle || "";
+}
+
+function setChatHint(text){
+  const h = document.getElementById("chatHint");
+  if(h) h.innerText = text || "";
+}
+
+function setChatFooterEnabled(enabled){
+  const input = document.getElementById("chatInput");
+  const sendBtn = document.querySelector('[onclick="chatEnviarMsg()"]');
+  if(input) input.disabled = !enabled;
+  if(sendBtn) sendBtn.disabled = !enabled;
+  if(input && enabled) input.placeholder = "Digite sua mensagem...";
+  if(input && !enabled) input.placeholder = "Somente leitura";
+}
+
+function showAdmUnitSelect(show){
+  const sel = document.getElementById("chatAdmUnitSel");
+  if(!sel) return;
+  sel.classList.toggle("d-none", !show);
+}
+
+function getUnidadesDoClienteAtivo(){
+  const cid = STATE?.clienteAtivoId || "";
+  const arr = (STATE?.unidadesBaseByCliente && STATE.unidadesBaseByCliente[cid]) ? STATE.unidadesBaseByCliente[cid] : [];
+  return Array.isArray(arr) ? arr : [];
+}
+function unitToKey(u){
+  const bloco  = (u.bloco || u.Bloco || "").toString().trim();
+  const unidade = (u.unidade || u.Unidade || "").toString().trim();
+  if(bloco && unidade) return `${bloco}-${unidade}`;
+  return (u.key || u.unit_key || u.UnitKey || "").toString().trim();
+}
+function unitToLabel(u){
+  const key = unitToKey(u);
+  const nome = (u.nome || u.Nome || "").toString().trim();
+  return nome ? `${key} • ${nome}` : key;
+}
+function preencherSelectUnidadesAdm(){
+  const sel = document.getElementById("chatAdmUnitSel");
+  if(!sel) return;
+  const current = sel.value || "";
+  sel.innerHTML = `<option value="">(Selecione uma unidade)</option>`;
+  getUnidadesDoClienteAtivo().forEach(u=>{
+    const key = unitToKey(u);
+    if(!key) return;
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = unitToLabel(u);
+    sel.appendChild(opt);
+  });
+  if(current) sel.value = current;
+}
+function chatAdmSelectUnit(){
+  chatManualRefresh();
+}
+
+function abrirChatMorador(){
+  const a = getMoradorAssembleia();
+  const c = getMoradorCliente();
+  if(!a || !c) return;
+  const cfg = getChatConfigFromAssembleia(a);
+  if(!cfg.enabled) return alert("Chat não está ativo nesta assembleia.");
+
+  if(!supabaseConfigOk()){
+    return alert("Supabase não configurado (URL/Publishable key).");
+  }
+
+  CHAT.role = "MORADOR";
+  CHAT.mode = cfg.mode;
+  CHAT.assemblyId = a.id;
+  CHAT.unitKey = (document.getElementById("mUnKey")?.innerText || "").trim() || null;
+  CHAT.senderName = (document.getElementById("mUnNome")?.innerText || "Morador").trim();
+
+  setChatHeader("Chat", `Modo: ${CHAT.mode.toUpperCase()} • Use Atualizar`);
+
+  showAdmUnitSelect(false);
+
+  if(CHAT.mode === "public"){
+    setChatFooterEnabled(false);
+    setChatHint("Chat público: somente leitura. Use @nome para mencionar.");
+  }else{
+    setChatFooterEnabled(true);
+    setChatHint("Chat privado: você conversa somente com a administração.");
+  }
+
+  abrirChatOverlay();
+  chatManualRefresh();
+}
+
+function abrirChatAdm(){
+  const a = getAssembleia();
+  if(!a) return alert("Selecione uma assembleia.");
+  const cfg = getChatConfigFromAssembleia(a);
+
+  if(!cfg.enabled) return alert("Ative o chat na Ordem do Dia para usar.");
+
+  if(!supabaseConfigOk()){
+    return alert("Supabase não configurado (URL/Publishable key).");
+  }
+
+  CHAT.role = ((SESSION?.operador?.role)||"ADM").toUpperCase();
+  if(!["ADM","ADMIN","MASTER","GERENTE"].includes(CHAT.role)) CHAT.role = "ADM";
+  CHAT.mode = cfg.mode;
+  CHAT.assemblyId = a.id;
+  CHAT.unitKey = null;
+  CHAT.senderName = (SESSION?.operador?.nome || CHAT.role);
+
+  setChatHeader(`Chat (${CHAT.role})`, `Modo: ${CHAT.mode.toUpperCase()} • Sem realtime`);
+
+  preencherSelectUnidadesAdm();
+
+  if(CHAT.mode === "private"){
+    showAdmUnitSelect(true);
+    setChatFooterEnabled(true);
+    setChatHint("Privado: selecione uma unidade para conversar. Use Atualizar para ver novas mensagens.");
+  }else{
+    showAdmUnitSelect(false);
+    setChatFooterEnabled(true);
+    setChatHint("Público: todos veem. Morador não responde (somente leitura).");
+  }
+
+  abrirChatOverlay();
+  chatManualRefresh();
+}
+
+async function chatEnviarMsg(){
+  try{
+    if(!CHAT.open) return;
+    if(!CHAT.assemblyId) return alert("Assembleia não definida.");
+
+    // morador no público: não envia
+    if(CHAT.role === "MORADOR" && CHAT.mode === "public"){
+      return;
+    }
+
+    // no privado, ADM/MASTER/GERENTE precisa selecionar unidade
+    if(CHAT.mode === "private" && CHAT.role !== "MORADOR"){
+      const sel = document.getElementById("chatAdmUnitSel");
+      const ukey = (sel?.value || "").trim();
+      if(!ukey) return alert("Selecione uma unidade.");
+      CHAT.unitKey = ukey;
+    }
+
+    const input = document.getElementById("chatInput");
+    const text = (input?.value || "").trim();
+    if(!text) return;
+
+    const payload = {
+      assembly_id: CHAT.assemblyId,
+      mode: CHAT.mode,
+      unit_key: (CHAT.mode === "public") ? null : CHAT.unitKey,
+      sender_role: (CHAT.role === "ADMIN") ? "ADM" : CHAT.role,
+      sender_name: CHAT.senderName,
+      message: text
+    };
+
+    const { error } = await supabase.from("chat_messages").insert([payload]);
+    if(error){
+      console.error(error);
+      return alert("Falha ao enviar. Verifique Policies/RLS no Supabase.");
+    }
+
+    input.value = "";
+    chatManualRefresh();
+  }catch(e){
+    console.error(e);
+    alert("Erro ao enviar mensagem.");
+  }
+}
+
+async function chatManualRefresh(){
+  try{
+    if(!CHAT.open) return;
+    const box = document.getElementById("chatBody");
+    if(!box) return;
+
+    // privado: ADM precisa escolher unidade antes de listar
+    if(CHAT.mode === "private" && CHAT.role !== "MORADOR"){
+      const sel = document.getElementById("chatAdmUnitSel");
+      CHAT.unitKey = (sel?.value || "").trim() || null;
+      if(!CHAT.unitKey){
+        box.innerHTML = "<div class='smallnote'>Selecione uma unidade no topo para ver a conversa.</div>";
+        return;
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("assembly_id", CHAT.assemblyId)
+      .order("created_at", { ascending: true });
+
+    if(error){
+      console.error(error);
+      box.innerHTML = "<div class='smallnote'>Erro ao carregar mensagens (ver console).</div>";
+      return;
+    }
+
+    box.innerHTML = "";
+
+    (data || []).forEach(msg => {
+      // filtro por modo
+      if(CHAT.mode === "private"){
+        if(CHAT.role === "MORADOR"){
+          if(msg.unit_key !== CHAT.unitKey) return;
+        }else{
+          if(msg.unit_key !== CHAT.unitKey) return;
+        }
+      }
+
+      const div = document.createElement("div");
+      const isStaff = ["ADM","ADMIN","MASTER","GERENTE"].includes((msg.sender_role||"").toUpperCase());
+      div.className = "chatMsg" + (isStaff ? " chatMsgAdm" : "");
+
+      const hora = msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : "";
+      div.innerHTML = `
+        <div class="chatMsgMeta">
+          <b>${msg.sender_name || msg.sender_role}</b>
+          <span>${hora}</span>
+          ${msg.mode ? `<span class="badge text-bg-light">${msg.mode}</span>` : ""}
+        </div>
+        <div class="chatMsgText"></div>
+      `;
+      div.querySelector(".chatMsgText").innerText = msg.message || "";
+      box.appendChild(div);
+    });
+
+    box.scrollTop = box.scrollHeight;
+  }catch(e){
+    console.error(e);
+  }
+}
+
+const _old_renderOrdem = window.renderOrdem;
+window.renderOrdem = function(){
+  _old_renderOrdem();
+  syncChatConfigUI();
+};
+</script>
+<div id="dbStatus" style="position:fixed;bottom:8px;left:8px;z-index:9999;font-size:12px;background:#0008;color:#fff;padding:4px 8px;border-radius:8px;">DB: -</div>
+
+<!-- CHAT MODAL -->
+<div class="chatModalOverlay" id="chatOverlay" aria-hidden="true">
+  <div class="chatModal">
+    <div class="chatHeader">
+      <div>
+        <div class="chatTitle" id="chatTitle">Chat</div>
+        <div class="chatSmall" id="chatSubtitle"></div>
+      </div>
+      <div class="chatBtnRow">
+        <select class="form-select form-select-sm d-none" id="chatAdmUnitSel" onchange="chatAdmSelectUnit()"></select>
+        <button class="btn btn-sm btn-outline-secondary" onclick="chatManualRefresh()">Atualizar</button>
+        <button class="btn btn-sm btn-outline-dark" onclick="fecharChat()">Fechar</button>
+      </div>
+    </div>
+    <div class="chatBody" id="chatBody"></div>
+    <div class="chatFooter">
+      <textarea class="form-control" id="chatInput" maxlength="300" placeholder="Digite sua mensagem..."></textarea>
+      <div class="d-flex flex-column gap-2">
+        <button class="btn btn-primary" onclick="chatEnviarMsg()">Enviar</button>
+        <div class="chatSmall" id="chatHint"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
